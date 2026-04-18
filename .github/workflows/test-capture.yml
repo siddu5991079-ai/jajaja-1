@@ -41,9 +41,9 @@ jobs:
           sleep 15
           
           # 4. Start FFmpeg Recording for exactly 60 seconds (-t 60)
-          echo "Starting 60 second test recording..."
+          echo "Starting 20 second test recording..."
           ffmpeg -f x11grab -video_size 1280x720 -framerate 30 -i :99 \
-          -t 60 -c:v libx264 -preset ultrafast -pix_fmt yuv420p output_test.mp4
+          -t 20 -c:v libx264 -preset ultrafast -pix_fmt yuv420p output_test.mp4
 
       - name: Upload Recording Artifact
         if: always() # Yeh ensure karega ke video laazmi upload ho
