@@ -1,0 +1,50 @@
+name: Test Stream Capture
+
+on:
+  workflow_dispatch: # Aap manually 'Run workflow' button dabayein ge
+
+jobs:
+  test-record:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb ffmpeg libgbm-dev
+
+      - name: Install Puppeteer
+        run: npm install puppeteer
+
+      - name: Run Capture and Record
+        run: |
+          # 1. Start Virtual Display
+          Xvfb :99 -screen 0 1280x720x24 &
+          export DISPLAY=:99
+          sleep 5
+
+          # 2. Start Puppeteer in background
+          node browser.js &
+          
+          # 3. Wait for browser to load the stream
+          sleep 15
+          
+          # 4. Start FFmpeg Recording for 60 seconds
+          echo "Starting 60 second test recording..."
+          ffmpeg -f x11grab -video_size 1280x720 -framerate 30 -i :99 \
+          -t 60 -c:v libx264 -preset ultrafast -pix_fmt yuv420p output_test.mp4
+
+      - name: Upload Recording Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stream-test-video
+          path: output_test.mp4
+          retention-days: 1
