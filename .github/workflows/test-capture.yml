@@ -1,7 +1,7 @@
-name: Test Stream Capture
+name: Test Stream Capture (Stealth Mode)
 
 on:
-  workflow_dispatch: # Aap manually 'Run workflow' button dabayein ge
+  workflow_dispatch:
 
 jobs:
   test-record:
@@ -21,8 +21,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb ffmpeg libgbm-dev
 
-      - name: Install Puppeteer
-        run: npm install puppeteer
+      - name: Install Puppeteer & Stealth Plugin
+        run: |
+          npm install puppeteer
+          npm install puppeteer-extra
+          npm install puppeteer-extra-plugin-stealth
 
       - name: Run Capture and Record
         run: |
@@ -34,16 +37,16 @@ jobs:
           # 2. Start Puppeteer in background
           node browser.js &
           
-          # 3. Wait for browser to load the stream
+          # 3. Wait for browser to bypass bot checks and load
           sleep 15
           
-          # 4. Start FFmpeg Recording for 60 seconds
-          echo "Starting 30 second test recording..."
+          # 4. Start FFmpeg Recording for exactly 60 seconds (-t 60)
+          echo "Starting 60 second test recording..."
           ffmpeg -f x11grab -video_size 1280x720 -framerate 30 -i :99 \
-          -t 30 -c:v libx264 -preset ultrafast -pix_fmt yuv420p output_test.mp4
+          -t 60 -c:v libx264 -preset ultrafast -pix_fmt yuv420p output_test.mp4
 
       - name: Upload Recording Artifact
-        if: always() # Yeh line add karne se cancel hone par bhi upload chalega
+        if: always() # Yeh ensure karega ke video laazmi upload ho
         uses: actions/upload-artifact@v4
         with:
           name: stream-test-video
