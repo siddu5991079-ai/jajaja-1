@@ -43,6 +43,7 @@ jobs:
           -t 60 -c:v libx264 -preset ultrafast -pix_fmt yuv420p output_test.mp4
 
       - name: Upload Recording Artifact
+        if: always() # Yeh line add karne se cancel hone par bhi upload chalega
         uses: actions/upload-artifact@v4
         with:
           name: stream-test-video
