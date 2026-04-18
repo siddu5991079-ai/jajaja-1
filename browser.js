@@ -1,52 +1,111 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
-// Activate Stealth Mode
 puppeteer.use(StealthPlugin());
 
 (async () => {
+  console.log("Launching Browser on GitHub Actions Virtual Screen...");
+  
   const browser = await puppeteer.launch({
-    headless: false, 
+    headless: false, // False rakha hai taake Xvfb par render ho
     defaultViewport: { width: 1280, height: 720 },
     args: [
       '--no-sandbox', 
-      '--disable-setuid-sandbox', 
-      '--start-fullscreen',
-      '--disable-gpu',
+      '--disable-setuid-sandbox',
       '--disable-web-security',
-      '--disable-features=IsolateOrigins,site-per-process'
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--window-size=1280,720',
+      '--autoplay-policy=no-user-gesture-required' // Auto-play allow karne ke liye
     ]
   });
 
   const page = await browser.newPage();
-  
-  // Real Windows 10 Chrome User-Agent
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
 
-  // Anti-hotlink Bypass Headers
-  await page.setExtraHTTPHeaders({
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Referer': 'https://dlstreams.com/',
-    'Origin': 'https://dlstreams.com'
-  });
-  
-  // Target URL (Stream 598)
-  const targetUrl = 'https://dlstreams.com/stream/stream-598.php'; 
-  
-  console.log(`Navigating to: ${targetUrl} in Stealth Mode...`);
-  
-  // Long timeout for Cloudflare/bot check delays
-  await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 90000 });
+  try {
+    console.log("Navigating to Homepage...");
+    await page.goto('https://dlstreams.com/', { waitUntil: 'networkidle2', timeout: 60000 });
+    await new Promise(r => setTimeout(r, 4000));
 
-  console.log("Page loaded. Attempting to click play...");
-  
-  // Click in the center of the screen to start video if it's paused
-  await page.mouse.click(640, 360);
-  
-  console.log("Keep browser open for 75 seconds for FFmpeg recording...");
-  
-  // Wait 75 seconds so FFmpeg finishes its 60-second task properly
-  await new Promise(resolve => setTimeout(resolve, 75000)); 
-  
+    const cricketSelector = 'a[href="/index.php?cat=Cricket"]';
+    await page.waitForSelector(cricketSelector, { visible: true, timeout: 10000 });
+    const cricketBtn = await page.$(cricketSelector);
+    if (cricketBtn) {
+        const box = await cricketBtn.boundingBox();
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
+        await new Promise(r => setTimeout(r, 1000)); 
+        await Promise.all([
+            page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }), 
+            page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+        ]);
+    }
+
+    console.log("Scrolling and clicking IPL match...");
+    await page.waitForSelector('div.schedule__event', { visible: true, timeout: 15000 });
+    await page.mouse.wheel({ deltaY: 300 });
+    await new Promise(r => setTimeout(r, 2000));
+
+    const targetMatch = await page.evaluateHandle(() => {
+        const events = Array.from(document.querySelectorAll('div.schedule__event'));
+        return events.find(el => el.textContent.includes('Indian Premier League'));
+    });
+
+    const box = await targetMatch.boundingBox();
+    if (box) {
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
+        await new Promise(r => setTimeout(r, 1000)); 
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+        
+        console.log("Clicking 'Willow 2 Cricket'...");
+        const willowSelector = 'a[data-ch="willow 2 cricket"]'; 
+        await page.waitForSelector(willowSelector, { visible: true, timeout: 10000 });
+        const willowBtn = await page.$(willowSelector);
+        
+        if (willowBtn) {
+            const wBox = await willowBtn.boundingBox();
+            await page.mouse.move(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2, { steps: 15 });
+            await new Promise(r => setTimeout(r, 1000)); 
+
+            const newPagePromise = new Promise(x => browser.once('targetcreated', target => x(target.page())));
+            await page.mouse.click(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2);
+            
+            const streamPage = await newPagePromise;
+            if (streamPage) {
+                console.log("Shifted to Stream Tab! Injecting Anti-Popup...");
+                await streamPage.bringToFront();
+                await streamPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
+                
+                await streamPage.evaluateOnNewDocument(() => { window.open = () => null; });
+
+                console.log("Waiting 12 seconds for auto-refreshes...");
+                await new Promise(r => setTimeout(r, 12000)); 
+                
+                console.log("Destroying Ad-Trap & clicking player...");
+                await streamPage.evaluate(() => {
+                    const trap = document.querySelector('div#dontfoid');
+                    if (trap) trap.remove();
+                    window.scrollBy({ top: 350, behavior: 'smooth' });
+                });
+                
+                await new Promise(r => setTimeout(r, 2000));
+                
+                await streamPage.mouse.move(640, 360, { steps: 20 });
+                await streamPage.mouse.click(640, 360);
+                
+                console.log("SUCCESS! Video should be playing. Recording next 30 seconds...");
+                
+                // 30 Seconds wait karega taake FFmpeg aram se video record kar sake
+                await new Promise(r => setTimeout(r, 30000));
+            }
+        }
+    } else {
+        console.log("IPL Match nahi mila.");
+    }
+
+  } catch (error) {
+    console.log("Execution stopped or error occurred:", error.message);
+  }
+
+  console.log("Closing browser...");
   await browser.close();
 })();
