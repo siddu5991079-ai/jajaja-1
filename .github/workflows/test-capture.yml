@@ -1,10 +1,10 @@
-name: Test Stream Capture (Stealth Mode)
+name: Live Stream Bypass & Record
 
 on:
   workflow_dispatch:
 
 jobs:
-  test-record:
+  bypass-and-record:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,34 +21,32 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb ffmpeg libgbm-dev
 
-      - name: Install Puppeteer & Stealth Plugin
+      - name: Install Puppeteer & Stealth
         run: |
-          npm install puppeteer
-          npm install puppeteer-extra
-          npm install puppeteer-extra-plugin-stealth
+          npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
 
-      - name: Run Capture and Record
+      - name: Run Bypass & Record Video
         run: |
           # 1. Start Virtual Display
           Xvfb :99 -screen 0 1280x720x24 &
           export DISPLAY=:99
-          sleep 5
+          sleep 3
 
-          # 2. Start Puppeteer in background
+          # 2. Start Puppeteer Script in Background
           node browser.js &
           
-          # 3. Wait for browser to bypass bot checks and load
-          sleep 15
+          # 3. Give browser 2 seconds to launch, then start FFmpeg
+          sleep 2
           
-          # 4. Start FFmpeg Recording for exactly 60 seconds (-t 60)
-          echo "Starting 20 second test recording..."
+          # 4. Record for exactly 85 seconds (-t 85)
+          echo "Starting 85-second recording..."
           ffmpeg -f x11grab -video_size 1280x720 -framerate 30 -i :99 \
-          -t 20 -c:v libx264 -preset ultrafast -pix_fmt yuv420p output_test.mp4
+          -t 85 -c:v libx264 -preset ultrafast -pix_fmt yuv420p bypass_record.mp4
 
       - name: Upload Recording Artifact
-        if: always() # Yeh ensure karega ke video laazmi upload ho
+        if: always() # Taake script fail bhi ho toh video zaroor mile
         uses: actions/upload-artifact@v4
         with:
-          name: stream-test-video
-          path: output_test.mp4
+          name: Stream-Bypass-Video
+          path: bypass_record.mp4
           retention-days: 1
