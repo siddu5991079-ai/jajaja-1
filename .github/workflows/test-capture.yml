@@ -1,11 +1,11 @@
 
-name: Live Stream Bypass & Record
+name: Live Stream Bypass & Broadcast
 
 on:
   workflow_dispatch:
 
 jobs:
-  bypass-and-record:
+  bypass-and-broadcast:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,40 +21,147 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb ffmpeg libgbm-dev
-          # Notice: Yahan pulseaudio hata diya gaya hai kyunke ab uski zaroorat nahi
 
       - name: Install Puppeteer & Stealth
         run: |
           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
 
-      - name: Run Browser Script (Native Recording)
+      - name: Start Live Broadcast to ok.ru
         run: |
-          # Sirf Browser chalega, screen recorder background mein nahi chalega
+          # Virtual screen on karna zaroori hai browser render karne ke liye
           Xvfb :99 -screen 0 1280x720x24 &
           export DISPLAY=:99
           sleep 3
           
-          # Yeh command theek 50 second ki video save kar ke band ho jayegi
+          # Yeh script ab background mein nahi chalegi, seedha live chalegi!
           node browser.js
 
-      - name: Convert to Smooth MP4
-        # Browser close hone ke baad, jab CPU free ho jaye, tab yeh convert karega
-        run: |
-          if [ -f raw_video.webm ]; then
-            echo "Converting to high quality MP4..."
-            ffmpeg -i raw_video.webm -c:v libx264 -preset fast -c:a aac bypass_record.mp4
-            echo "Conversion done!"
-          else
-            echo "Video file not found!"
-          fi
 
-      - name: Upload Recording Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Stream-Bypass-Video
-          path: bypass_record.mp4
-          retention-days: 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ======*****222222 ============== Great new 2026 technolgy iss correct karleyaa video + audio . New tecnology is Native MediaRecorder, lekin abbey beey eek issue hai RAM k jokey ok.ru k liye 24hours stream k hai , opper isko solve karney k try karty hai =======================================
+
+
+
+# name: Live Stream Bypass & Record
+
+# on:
+#   workflow_dispatch:
+
+# jobs:
+#   bypass-and-record:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
+
+#       - name: Install System Dependencies
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y xvfb ffmpeg libgbm-dev
+#           # Notice: Yahan pulseaudio hata diya gaya hai kyunke ab uski zaroorat nahi
+
+#       - name: Install Puppeteer & Stealth
+#         run: |
+#           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
+
+#       - name: Run Browser Script (Native Recording)
+#         run: |
+#           # Sirf Browser chalega, screen recorder background mein nahi chalega
+#           Xvfb :99 -screen 0 1280x720x24 &
+#           export DISPLAY=:99
+#           sleep 3
+          
+#           # Yeh command theek 50 second ki video save kar ke band ho jayegi
+#           node browser.js
+
+#       - name: Convert to Smooth MP4
+#         # Browser close hone ke baad, jab CPU free ho jaye, tab yeh convert karega
+#         run: |
+#           if [ -f raw_video.webm ]; then
+#             echo "Converting to high quality MP4..."
+#             ffmpeg -i raw_video.webm -c:v libx264 -preset fast -c:a aac bypass_record.mp4
+#             echo "Conversion done!"
+#           else
+#             echo "Video file not found!"
+#           fi
+
+#       - name: Upload Recording Artifact
+#         if: always()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: Stream-Bypass-Video
+#           path: bypass_record.mp4
+#           retention-days: 1
 
 
 
