@@ -13,17 +13,17 @@ puppeteer.use(StealthPlugin());
   
   const browser = await puppeteer.launch({
     headless: false, 
-    defaultViewport: { width: 854, height: 480 }, // UPDATE: Resolution lowered to 480p
+    defaultViewport: { width: 426, height: 240 }, // UPDATE: Resolution lowered to 240p
     args: [
       '--no-sandbox', 
       '--disable-setuid-sandbox',
       '--disable-web-security',
       '--disable-features=IsolateOrigins,site-per-process',
-      '--window-size=854,480', // UPDATE: Window size lowered to 480p
+      '--window-size=426,240', // UPDATE: Window size lowered to 240p
       '--autoplay-policy=no-user-gesture-required', 
-      '--disable-gpu', // UPDATE: Disable GPU styling to save CPU
-      '--disable-software-rasterizer', // UPDATE: Lower CPU usage
-      '--disable-dev-shm-usage', // UPDATE: Prevent memory crashes
+      '--disable-gpu', 
+      '--disable-software-rasterizer', 
+      '--disable-dev-shm-usage', 
       `--proxy-server=http://${proxyIpPort}` 
     ]
   });
