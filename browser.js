@@ -38,7 +38,16 @@ if (isMainThread) {
 
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
 
+        // ============================================================
+        // UPDATE 1: DATA TRACKER (Checking if video is actually flowing)
+        // ============================================================
+        let chunkCounter = 0;
         await page.exposeFunction('sendToWorker2', (base64Chunk) => {
+            chunkCounter++;
+            // Har 5th chunk (yani 5 seconds baad) terminal mein print karega
+            if (chunkCounter % 5 === 0) {
+                console.log(`[DATA RADAR] Chunk #${chunkCounter} flowing to FFmpeg | Size: ${base64Chunk.length} bytes`);
+            }
             ffmpegWorker.postMessage({ type: 'VIDEO_CHUNK', data: base64Chunk });
         });
 
@@ -116,7 +125,6 @@ if (isMainThread) {
                         
                         console.log("[Worker 1] Video unmuted. Piping stream to Worker 2...");
                         
-                        // Original Native MediaRecorder Logic
                         for (const frame of streamPage.frames()) {
                             try {
                                 await frame.evaluate(() => {
@@ -141,27 +149,21 @@ if (isMainThread) {
                             } catch (e) {}
                         }
 
-                        // ========================================================
-                        // NAYA UPDATE: 1 Min 5 Sec (65 seconds) par Screenshot
-                        // ========================================================
                         setTimeout(async () => {
                             try {
                                 console.log("\n=======================================================");
                                 console.log("⏰ PRINT STATEMENT: 1 Min 5 Sec (65s) ho gaye hain!");
                                 console.log("📸 Taking screenshot of the Live Player now...");
-                                
-                                // Stream page ki picture le kar save karega
                                 await streamPage.screenshot({ path: 'stream_screenshot.png', fullPage: true });
-                                
                                 console.log("✅ Screenshot successfully saved as 'stream_screenshot.png'");
                                 console.log("=======================================================\n");
                             } catch (err) {
-                                console.log("Screenshot lene mein error aaya:", err.message);
+                                console.log("Screenshot error:", err.message);
                             }
-                        }, 65000); // 65000 ms = exactly 65 seconds
+                        }, 65000); 
 
                         console.log("Stream is LIVE on ok.ru! Waiting for background tasks...");
-                        await new Promise(r => setTimeout(r, 18000000)); // 5 Hours Live limit
+                        await new Promise(r => setTimeout(r, 18000000)); 
                     }
                 }
             } else {
@@ -208,8 +210,15 @@ else {
         }
     });
 
+    // ============================================================
+    // UPDATE 2: FFMPEG LOGS ENABLED (Dekhein error kahan aa raha hai)
+    // ============================================================
     ffmpeg.stderr.on('data', (data) => {
-        // console.log(`[FFMPEG] ${data.toString()}`);
+        const logMsg = data.toString().trim();
+        // Sirf zaroori errors aur connection issues print honge taake spam na ho
+        if(logMsg.toLowerCase().includes('error') || logMsg.toLowerCase().includes('failed') || logMsg.includes('rtmp')) {
+            console.log(`[FFMPEG ALERT] ${logMsg}`);
+        }
     });
 }
 
