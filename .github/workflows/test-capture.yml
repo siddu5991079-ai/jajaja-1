@@ -1,5 +1,4 @@
-
-name: Live Stream Bypass & Broadcast
+name: Project12 Live Stream Bypass & Record
 
 on:
   workflow_dispatch:
@@ -26,15 +25,118 @@ jobs:
         run: |
           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
 
-      - name: Start Live Broadcast to ok.ru
+      - name: Start Advanced Broadcast (Worker Threads)
         run: |
-          # Virtual screen on karna zaroori hai browser render karne ke liye
+          # 1. Start Virtual Display taake browser render ho sake
           Xvfb :99 -screen 0 1280x720x24 &
           export DISPLAY=:99
           sleep 3
-          
-          # Yeh script ab background mein nahi chalegi, seedha live chalegi!
+
+          # 2. Main script run karein (Yeh automatically threads handle karega)
+          echo "Starting Node.js Broadcaster with Worker Threads..."
           node browser.js
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# =================== new technology 20277, threads system worker 1 and 2 opper waley code mei ==============================
+
+
+
+# 1
+# name: Live Stream Bypass & Broadcast
+
+# on:
+#   workflow_dispatch:
+
+# jobs:
+#   bypass-and-broadcast:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
+
+#       - name: Install System Dependencies
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y xvfb ffmpeg libgbm-dev
+
+#       - name: Install Puppeteer & Stealth
+#         run: |
+#           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
+
+#       - name: Start Live Broadcast to ok.ru
+#         run: |
+#           # Virtual screen on karna zaroori hai browser render karne ke liye
+#           Xvfb :99 -screen 0 1280x720x24 &
+#           export DISPLAY=:99
+#           sleep 3
+          
+#           # Yeh script ab background mein nahi chalegi, seedha live chalegi!
+#           node browser.js
 
 
 
