@@ -1,5 +1,60 @@
 
+name: Live Stream Bypass & Record
 
+on:
+  workflow_dispatch:
+
+jobs:
+  bypass-and-record:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb ffmpeg libgbm-dev
+          # Notice: Yahan pulseaudio hata diya gaya hai kyunke ab uski zaroorat nahi
+
+      - name: Install Puppeteer & Stealth
+        run: |
+          npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
+
+      - name: Run Browser Script (Native Recording)
+        run: |
+          # Sirf Browser chalega, screen recorder background mein nahi chalega
+          Xvfb :99 -screen 0 1280x720x24 &
+          export DISPLAY=:99
+          sleep 3
+          
+          # Yeh command theek 50 second ki video save kar ke band ho jayegi
+          node browser.js
+
+      - name: Convert to Smooth MP4
+        # Browser close hone ke baad, jab CPU free ho jaye, tab yeh convert karega
+        run: |
+          if [ -f raw_video.webm ]; then
+            echo "Converting to high quality MP4..."
+            ffmpeg -i raw_video.webm -c:v libx264 -preset fast -c:a aac bypass_record.mp4
+            echo "Conversion done!"
+          else
+            echo "Video file not found!"
+          fi
+
+      - name: Upload Recording Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stream-Bypass-Video
+          path: bypass_record.mp4
+          retention-days: 1
 
 
 
@@ -145,60 +200,60 @@
 
 
 
-# // ======== great great yaha taaak sab kuch ready hai , bas audio ko unmute karna hai jokey ooper code mei test karty hai and yml file mei koi change nahey kyahai ok , yml mei iss stament ko copy and paste ky hai , and unmute huqaya isss below code iss k part hai, aab audio to open huqaya hai lekin github mei koi speaker nahey hai isliye ooper speaker wala code hai   =============================
+# // ************ ======== great great yaha taaak sab kuch ready hai , bas audio ko unmute karna hai jokey ooper code mei test karty hai and yml file mei koi change nahey kyahai ok , yml mei iss stament ko copy and paste ky hai , and unmute huqaya isss below code iss k part hai, aab audio to open huqaya hai lekin github mei koi speaker nahey hai isliye ooper speaker wala code hai   =============================
 
-name: Live Stream Bypass & Record
+# name: Live Stream Bypass & Record
 
-on:
-  workflow_dispatch:
+# on:
+#   workflow_dispatch:
 
-jobs:
-  bypass-and-record:
-    runs-on: ubuntu-latest
+# jobs:
+#   bypass-and-record:
+#     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
 
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg libgbm-dev
+#       - name: Install System Dependencies
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y xvfb ffmpeg libgbm-dev
 
-      - name: Install Puppeteer & Stealth
-        run: |
-          npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
+#       - name: Install Puppeteer & Stealth
+#         run: |
+#           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
 
-      - name: Run Bypass & Record Video
-        run: |
-          # 1. Start Virtual Display
-          Xvfb :99 -screen 0 1280x720x24 &
-          export DISPLAY=:99
-          sleep 3
+#       - name: Run Bypass & Record Video
+#         run: |
+#           # 1. Start Virtual Display
+#           Xvfb :99 -screen 0 1280x720x24 &
+#           export DISPLAY=:99
+#           sleep 3
 
-          # 2. Start Puppeteer Script in Background
-          node browser.js &
+#           # 2. Start Puppeteer Script in Background
+#           node browser.js &
           
-          # 3. Give browser 2 seconds to launch, then start FFmpeg
-          sleep 2
+#           # 3. Give browser 2 seconds to launch, then start FFmpeg
+#           sleep 2
           
-          # 4. Record for 30 seconds (-t 30)
-          echo "Starting 30-second recording..."
-          ffmpeg -f x11grab -video_size 1280x720 -framerate 30 -i :99 \
-          -t 50 -c:v libx264 -preset ultrafast -pix_fmt yuv420p bypass_record.mp4
+#           # 4. Record for 30 seconds (-t 30)
+#           echo "Starting 30-second recording..."
+#           ffmpeg -f x11grab -video_size 1280x720 -framerate 30 -i :99 \
+#           -t 50 -c:v libx264 -preset ultrafast -pix_fmt yuv420p bypass_record.mp4
 
-      - name: Upload Recording Artifact
-        if: always() # Taake script fail bhi ho toh video zaroor mile
-        uses: actions/upload-artifact@v4
-        with:
-          name: Stream-Bypass-Video
-          path: bypass_record.mp4
-          retention-days: 1
+#       - name: Upload Recording Artifact
+#         if: always() # Taake script fail bhi ho toh video zaroor mile
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: Stream-Bypass-Video
+#           path: bypass_record.mp4
+#           retention-days: 1
 
 
 
