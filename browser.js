@@ -1,25 +1,45 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const fs = require('fs'); // Update: File save karne ke liye
+const { spawn } = require('child_process');
 
 puppeteer.use(StealthPlugin());
 
 (async () => {
-  console.log("Launching Browser on GitHub Actions with Native Recorder...");
+  console.log("Launching Browser for ZERO-LAG Live Broadcast to ok.ru...");
 
   const proxyIpPort = '31.59.20.176:6754';
   const proxyUser = 'cjasfidu';
   const proxyPass = 'qhnyvm0qpf6p';
   
+  // UPDATE: Yahan aapka asali ok.ru ka RTMP URL aur Stream Key lag gaya hai
+  const rtmpUrl = 'rtmp://vsu.okcdn.ru/input/14601603391083_14040893622891_puxzrwjniu';
+
+  // FFmpeg ka Live Streaming process start karna
+  const ffmpeg = spawn('ffmpeg', [
+      '-i', 'pipe:0', 
+      '-c:v', 'libx264', 
+      '-preset', 'ultrafast', 
+      '-crf', '28', 
+      '-c:a', 'aac', 
+      '-b:a', '128k', 
+      '-f', 'flv', 
+      rtmpUrl // Direct apke ok.ru channel par jayega
+  ]);
+
+  ffmpeg.stderr.on('data', (data) => {
+      // Agar streaming mein masla aye toh isko uncomment karein error dekhne ke liye
+      // console.log(`FFmpeg: ${data}`); 
+  });
+
   const browser = await puppeteer.launch({
     headless: false, 
     defaultViewport: { width: 1280, height: 720 },
     args: [
       '--no-sandbox', 
       '--disable-setuid-sandbox',
-      '--disable-web-security', // CORS bypass ke liye zaroori hai
+      '--disable-web-security', 
       '--disable-features=IsolateOrigins,site-per-process',
-      '--enable-experimental-web-platform-features', // Native WebM support
+      '--enable-experimental-web-platform-features', 
       '--window-size=1280,720',
       '--autoplay-policy=no-user-gesture-required', 
       `--proxy-server=http://${proxyIpPort}`
@@ -28,13 +48,16 @@ puppeteer.use(StealthPlugin());
 
   const page = await browser.newPage();
   
-  await page.authenticate({
-      username: proxyUser,
-      password: proxyPass
-  });
-  console.log("Proxy credentials applied successfully.");
+  await page.authenticate({ username: proxyUser, password: proxyPass });
+  console.log("Proxy credentials applied.");
 
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
+
+  // Video ke chunks pakar kar ok.ru (FFmpeg) ko bhejna
+  await page.exposeFunction('sendChunkToFFmpeg', (base64Chunk) => {
+      const buffer = Buffer.from(base64Chunk, 'base64');
+      ffmpeg.stdin.write(buffer); 
+  });
 
   try {
     console.log("Navigating to Homepage...");
@@ -87,24 +110,20 @@ puppeteer.use(StealthPlugin());
             if (streamPage) {
                 console.log("Shifted to Stream Tab! Injecting Anti-Popup...");
                 await streamPage.bringToFront();
-                await streamPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
                 
                 await streamPage.evaluateOnNewDocument(() => { window.open = () => null; });
 
                 console.log("Waiting 12 seconds for auto-refreshes...");
                 await new Promise(r => setTimeout(r, 12000)); 
                 
-                console.log("Destroying Ad-Trap and scrolling...");
+                console.log("Destroying Ad-Trap and unmuting...");
                 await streamPage.evaluate(() => {
                     const trap = document.querySelector('div#dontfoid');
                     if (trap) trap.remove();
-                    window.scrollBy({ top: 400, behavior: 'smooth' });
                 });
                 
-                console.log("Waiting 3 seconds before unmuting...");
                 await new Promise(r => setTimeout(r, 3000));
                 
-                console.log("Bypassing ads and unmuting safely...");
                 for (const frame of streamPage.frames()) {
                     try {
                         await frame.evaluate(() => {
@@ -114,55 +133,36 @@ puppeteer.use(StealthPlugin());
                     } catch (error) {}
                 }
                 
-                console.log("SUCCESS! Starting 50-second ZERO-LAG Native Recording...");
+                console.log("SUCCESS! Video unmuted. Piping stream to ok.ru...");
                 
-                // UPDATE: Advanced Native MediaRecorder Logic
-                let videoRecorded = false;
+                // Live Stream ka Asal Jadu
                 for (const frame of streamPage.frames()) {
-                    if (videoRecorded) break;
                     try {
-                        const base64Video = await frame.evaluate(async () => {
-                            return new Promise((resolve) => {
-                                const video = document.querySelector('video');
-                                if (!video) return resolve(null);
-
-                                try {
-                                    // Player se direct video aur audio stream grab karna
-                                    const stream = video.captureStream();
-                                    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-                                    const chunks = [];
-
-                                    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-                                    recorder.onstop = () => {
-                                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        await frame.evaluate(() => {
+                            const video = document.querySelector('video');
+                            if (video) {
+                                const stream = video.captureStream();
+                                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                                
+                                recorder.ondataavailable = async (e) => {
+                                    if (e.data.size > 0) {
                                         const reader = new FileReader();
-                                        reader.readAsDataURL(blob);
-                                        reader.onloadend = () => resolve(reader.result);
-                                    };
-
-                                    recorder.start();
-                                    // Theek 50 seconds tak record karega
-                                    setTimeout(() => recorder.stop(), 50000); 
-                                } catch (err) {
-                                    resolve(null);
-                                }
-                            });
+                                        reader.readAsDataURL(e.data);
+                                        reader.onloadend = () => {
+                                            const base64 = reader.result.split(',')[1];
+                                            window.sendChunkToFFmpeg(base64); 
+                                        }
+                                    }
+                                };
+                                recorder.start(1000); // 1-1 second ke video tukray ok.ru ko bhejna
+                            }
                         });
-
-                        // Agar video mili toh usko raw_video.webm ke naam se save kar lo
-                        if (base64Video) {
-                            const base64Data = base64Video.split(',')[1];
-                            fs.writeFileSync('raw_video.webm', Buffer.from(base64Data, 'base64'));
-                            console.log("Perfect Native Match Recording Saved!");
-                            videoRecorded = true;
-                        }
                     } catch (e) {}
                 }
 
-                if (!videoRecorded) {
-                    console.log("Video player not found. Fallback wait.");
-                    await new Promise(r => setTimeout(r, 50000));
-                }
+                // GitHub free action maximum 6 ghante chalta hai, hum 5 ghante ka timer laga dete hain
+                console.log("Stream is LIVE! You can now watch it on your ok.ru channel.");
+                await new Promise(r => setTimeout(r, 18000000)); // 5 Hours
             }
         }
     } else {
@@ -173,9 +173,230 @@ puppeteer.use(StealthPlugin());
     console.log("Execution stopped or error occurred:", error.message);
   }
 
-  console.log("Closing browser to free up CPU...");
+  console.log("Closing browser and stopping stream...");
+  ffmpeg.stdin.end();
   await browser.close();
 })();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+// ======*****222222 ============== Great new 2026 technolgy iss correct karleyaa video + audio . New tecnology is Native MediaRecorder, lekin abbey beey eek issue hai RAM k jokey ok.ru k liye 24hours stream k hai , opper isko solve karney k try karty hai =======================================
+
+
+
+
+
+
+// const puppeteer = require('puppeteer-extra');
+// const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+// const fs = require('fs'); // Update: File save karne ke liye
+
+// puppeteer.use(StealthPlugin());
+
+// (async () => {
+//   console.log("Launching Browser on GitHub Actions with Native Recorder...");
+
+//   const proxyIpPort = '31.59.20.176:6754';
+//   const proxyUser = 'cjasfidu';
+//   const proxyPass = 'qhnyvm0qpf6p';
+  
+//   const browser = await puppeteer.launch({
+//     headless: false, 
+//     defaultViewport: { width: 1280, height: 720 },
+//     args: [
+//       '--no-sandbox', 
+//       '--disable-setuid-sandbox',
+//       '--disable-web-security', // CORS bypass ke liye zaroori hai
+//       '--disable-features=IsolateOrigins,site-per-process',
+//       '--enable-experimental-web-platform-features', // Native WebM support
+//       '--window-size=1280,720',
+//       '--autoplay-policy=no-user-gesture-required', 
+//       `--proxy-server=http://${proxyIpPort}`
+//     ]
+//   });
+
+//   const page = await browser.newPage();
+  
+//   await page.authenticate({
+//       username: proxyUser,
+//       password: proxyPass
+//   });
+//   console.log("Proxy credentials applied successfully.");
+
+//   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
+
+//   try {
+//     console.log("Navigating to Homepage...");
+//     await page.goto('https://dlstreams.com/', { waitUntil: 'networkidle2', timeout: 60000 });
+//     await new Promise(r => setTimeout(r, 4000));
+
+//     const cricketSelector = 'a[href="/index.php?cat=Cricket"]';
+//     await page.waitForSelector(cricketSelector, { visible: true, timeout: 10000 });
+//     const cricketBtn = await page.$(cricketSelector);
+//     if (cricketBtn) {
+//         const box = await cricketBtn.boundingBox();
+//         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
+//         await new Promise(r => setTimeout(r, 1000)); 
+//         await Promise.all([
+//             page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }), 
+//             page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+//         ]);
+//     }
+
+//     console.log("Scrolling and clicking IPL match...");
+//     await page.waitForSelector('div.schedule__event', { visible: true, timeout: 15000 });
+//     await page.mouse.wheel({ deltaY: 600 });
+//     await new Promise(r => setTimeout(r, 2000));
+
+//     const targetMatch = await page.evaluateHandle(() => {
+//         const events = Array.from(document.querySelectorAll('div.schedule__event'));
+//         return events.find(el => el.textContent.includes('Indian Premier League'));
+//     });
+
+//     const box = await targetMatch.boundingBox();
+//     if (box) {
+//         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
+//         await new Promise(r => setTimeout(r, 1000)); 
+//         await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+        
+//         console.log("Clicking 'Willow 2 Cricket'...");
+//         const willowSelector = 'a[data-ch="willow 2 cricket"]'; 
+//         await page.waitForSelector(willowSelector, { visible: true, timeout: 10000 });
+//         const willowBtn = await page.$(willowSelector);
+        
+//         if (willowBtn) {
+//             const wBox = await willowBtn.boundingBox();
+//             await page.mouse.move(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2, { steps: 15 });
+//             await new Promise(r => setTimeout(r, 1000)); 
+
+//             const newPagePromise = new Promise(x => browser.once('targetcreated', target => x(target.page())));
+//             await page.mouse.click(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2);
+            
+//             const streamPage = await newPagePromise;
+//             if (streamPage) {
+//                 console.log("Shifted to Stream Tab! Injecting Anti-Popup...");
+//                 await streamPage.bringToFront();
+//                 await streamPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
+                
+//                 await streamPage.evaluateOnNewDocument(() => { window.open = () => null; });
+
+//                 console.log("Waiting 12 seconds for auto-refreshes...");
+//                 await new Promise(r => setTimeout(r, 12000)); 
+                
+//                 console.log("Destroying Ad-Trap and scrolling...");
+//                 await streamPage.evaluate(() => {
+//                     const trap = document.querySelector('div#dontfoid');
+//                     if (trap) trap.remove();
+//                     window.scrollBy({ top: 400, behavior: 'smooth' });
+//                 });
+                
+//                 console.log("Waiting 3 seconds before unmuting...");
+//                 await new Promise(r => setTimeout(r, 3000));
+                
+//                 console.log("Bypassing ads and unmuting safely...");
+//                 for (const frame of streamPage.frames()) {
+//                     try {
+//                         await frame.evaluate(() => {
+//                             const unmuteBtn = document.querySelector('#UnMutePlayer button');
+//                             if (unmuteBtn) unmuteBtn.click();
+//                         });
+//                     } catch (error) {}
+//                 }
+                
+//                 console.log("SUCCESS! Starting 50-second ZERO-LAG Native Recording...");
+                
+//                 // UPDATE: Advanced Native MediaRecorder Logic
+//                 let videoRecorded = false;
+//                 for (const frame of streamPage.frames()) {
+//                     if (videoRecorded) break;
+//                     try {
+//                         const base64Video = await frame.evaluate(async () => {
+//                             return new Promise((resolve) => {
+//                                 const video = document.querySelector('video');
+//                                 if (!video) return resolve(null);
+
+//                                 try {
+//                                     // Player se direct video aur audio stream grab karna
+//                                     const stream = video.captureStream();
+//                                     const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+//                                     const chunks = [];
+
+//                                     recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+//                                     recorder.onstop = () => {
+//                                         const blob = new Blob(chunks, { type: 'video/webm' });
+//                                         const reader = new FileReader();
+//                                         reader.readAsDataURL(blob);
+//                                         reader.onloadend = () => resolve(reader.result);
+//                                     };
+
+//                                     recorder.start();
+//                                     // Theek 50 seconds tak record karega
+//                                     setTimeout(() => recorder.stop(), 50000); 
+//                                 } catch (err) {
+//                                     resolve(null);
+//                                 }
+//                             });
+//                         });
+
+//                         // Agar video mili toh usko raw_video.webm ke naam se save kar lo
+//                         if (base64Video) {
+//                             const base64Data = base64Video.split(',')[1];
+//                             fs.writeFileSync('raw_video.webm', Buffer.from(base64Data, 'base64'));
+//                             console.log("Perfect Native Match Recording Saved!");
+//                             videoRecorded = true;
+//                         }
+//                     } catch (e) {}
+//                 }
+
+//                 if (!videoRecorded) {
+//                     console.log("Video player not found. Fallback wait.");
+//                     await new Promise(r => setTimeout(r, 50000));
+//                 }
+//             }
+//         }
+//     } else {
+//         console.log("IPL Match nahi mila.");
+//     }
+
+//   } catch (error) {
+//     console.log("Execution stopped or error occurred:", error.message);
+//   }
+
+//   console.log("Closing browser to free up CPU...");
+//   await browser.close();
+// })();
 
 
 
