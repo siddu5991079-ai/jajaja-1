@@ -42,7 +42,7 @@ puppeteer.use(StealthPlugin());
 
     console.log("Scrolling and clicking IPL match...");
     await page.waitForSelector('div.schedule__event', { visible: true, timeout: 15000 });
-    await page.mouse.wheel({ deltaY: 300 });
+    await page.mouse.wheel({ deltaY: 600 });
     await new Promise(r => setTimeout(r, 2000));
 
     const targetMatch = await page.evaluateHandle(() => {
