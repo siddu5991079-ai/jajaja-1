@@ -41,7 +41,7 @@ jobs:
           # 4. Record for exactly 85 seconds (-t 85)
           echo "Starting 85-second recording..."
           ffmpeg -f x11grab -video_size 1280x720 -framerate 30 -i :99 \
-          -t 85 -c:v libx264 -preset ultrafast -pix_fmt yuv420p bypass_record.mp4
+          -t 30 -c:v libx264 -preset ultrafast -pix_fmt yuv420p bypass_record.mp4
 
       - name: Upload Recording Artifact
         if: always() # Taake script fail bhi ho toh video zaroor mile
