@@ -1,7 +1,3 @@
-
-
-# // ======== great great yaha taaak sab kuch ready hai , bas audio ko unmute karna hai jokey ooper code mei test karty hai and yml file mei koi change nahey kyahai ok , yml mei iss stament ko copy and paste ky hai  =============================
-
 name: Live Stream Bypass & Record
 
 on:
@@ -21,9 +17,10 @@ jobs:
           node-version: '20'
 
       - name: Install System Dependencies
+        # UPDATE 1: 'pulseaudio' add kiya gaya hai taake virtual audio chal sake
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg libgbm-dev
+          sudo apt-get install -y xvfb ffmpeg libgbm-dev pulseaudio
 
       - name: Install Puppeteer & Stealth
         run: |
@@ -31,6 +28,9 @@ jobs:
 
       - name: Run Bypass & Record Video
         run: |
+          # UPDATE 2: Start Virtual Audio (PulseAudio) daemon in background
+          pulseaudio --start --exit-idle-time=-1
+          
           # 1. Start Virtual Display
           Xvfb :99 -screen 0 1280x720x24 &
           export DISPLAY=:99
@@ -42,10 +42,13 @@ jobs:
           # 3. Give browser 2 seconds to launch, then start FFmpeg
           sleep 2
           
-          # 4. Record for 30 seconds (-t 30)
-          echo "Starting 30-second recording..."
-          ffmpeg -f x11grab -video_size 1280x720 -framerate 30 -i :99 \
-          -t 50 -c:v libx264 -preset ultrafast -pix_fmt yuv420p bypass_record.mp4
+          # UPDATE 3: Record for 30 seconds with BOTH Video and Audio
+          # (-f pulse -i default) add kiya hai audio capture karne ke liye
+          # (-c:a aac) add kiya hai audio format ke liye
+          echo "Starting 30-second recording with Audio..."
+          ffmpeg -y -f x11grab -video_size 1280x720 -framerate 30 -i :99 \
+          -f pulse -i default \
+          -t 30 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac bypass_record.mp4
 
       - name: Upload Recording Artifact
         if: always() # Taake script fail bhi ho toh video zaroor mile
@@ -54,6 +57,132 @@ jobs:
           name: Stream-Bypass-Video
           path: bypass_record.mp4
           retention-days: 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# // ======== great great yaha taaak sab kuch ready hai , bas audio ko unmute karna hai jokey ooper code mei test karty hai and yml file mei koi change nahey kyahai ok , yml mei iss stament ko copy and paste ky hai , and unmute huqaya isss below code iss k part hai, aab audio to open huqaya hai lekin github mei koi speaker nahey hai isliye ooper speaker wala code hai   =============================
+
+# name: Live Stream Bypass & Record
+
+# on:
+#   workflow_dispatch:
+
+# jobs:
+#   bypass-and-record:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
+
+#       - name: Install System Dependencies
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y xvfb ffmpeg libgbm-dev
+
+#       - name: Install Puppeteer & Stealth
+#         run: |
+#           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
+
+#       - name: Run Bypass & Record Video
+#         run: |
+#           # 1. Start Virtual Display
+#           Xvfb :99 -screen 0 1280x720x24 &
+#           export DISPLAY=:99
+#           sleep 3
+
+#           # 2. Start Puppeteer Script in Background
+#           node browser.js &
+          
+#           # 3. Give browser 2 seconds to launch, then start FFmpeg
+#           sleep 2
+          
+#           # 4. Record for 30 seconds (-t 30)
+#           echo "Starting 30-second recording..."
+#           ffmpeg -f x11grab -video_size 1280x720 -framerate 30 -i :99 \
+#           -t 50 -c:v libx264 -preset ultrafast -pix_fmt yuv420p bypass_record.mp4
+
+#       - name: Upload Recording Artifact
+#         if: always() # Taake script fail bhi ho toh video zaroor mile
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: Stream-Bypass-Video
+#           path: bypass_record.mp4
+#           retention-days: 1
 
 
 
