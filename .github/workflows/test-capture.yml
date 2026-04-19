@@ -48,7 +48,7 @@ jobs:
           echo "Starting 30-second recording with Audio..."
           ffmpeg -y -f x11grab -video_size 1280x720 -framerate 30 -i :99 \
           -f pulse -i default \
-          -t 30 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac bypass_record.mp4
+          -t 45 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac bypass_record.mp4
 
       - name: Upload Recording Artifact
         if: always() # Taake script fail bhi ho toh video zaroor mile
