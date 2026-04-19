@@ -30,8 +30,8 @@ jobs:
           # Start Virtual Audio
           pulseaudio --start --exit-idle-time=-1
           
-          # 1. Start Virtual Display at 480p (Super Light weight)
-          Xvfb :99 -screen 0 854x480x24 &
+          # 1. Start Virtual Display at 240p (Ultra Light weight)
+          Xvfb :99 -screen 0 426x240x24 &
           export DISPLAY=:99
           sleep 3
 
@@ -41,12 +41,12 @@ jobs:
           # 3. Give browser 2 seconds to launch, then start FFmpeg
           sleep 2
           
-          # 4. Ultra-Optimized Recording (480p, 20fps)
-          echo "Starting 30-second optimized recording..."
-          ffmpeg -y -f x11grab -video_size 854x480 -framerate 20 -draw_mouse 0 -i :99 \
+          # 4. Ultra-Optimized Recording (240p, 15fps)
+          echo "Starting 30-second optimized 240p recording..."
+          ffmpeg -y -f x11grab -video_size 426x240 -framerate 15 -draw_mouse 0 -i :99 \
           -f pulse -i default \
-          -t 35 -c:v libx264 -preset ultrafast -crf 30 -pix_fmt yuv420p \
-          -c:a aac -b:a 96k -threads 2 bypass_record.mp4
+          -t 30 -c:v libx264 -preset ultrafast -crf 32 -pix_fmt yuv420p \
+          -c:a aac -b:a 64k -threads 2 bypass_record.mp4
 
       - name: Upload Recording Artifact
         if: always()
@@ -55,7 +55,6 @@ jobs:
           name: Stream-Bypass-Video
           path: bypass_record.mp4
           retention-days: 1
-
 
 
 
