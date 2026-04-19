@@ -30,8 +30,8 @@ jobs:
           # Start Virtual Audio
           pulseaudio --start --exit-idle-time=-1
           
-          # 1. Start Virtual Display
-          Xvfb :99 -screen 0 1280x720x24 &
+          # 1. Start Virtual Display at 480p (Super Light weight)
+          Xvfb :99 -screen 0 854x480x24 &
           export DISPLAY=:99
           sleep 3
 
@@ -41,12 +41,12 @@ jobs:
           # 3. Give browser 2 seconds to launch, then start FFmpeg
           sleep 2
           
-          # 4. Record with Optimized Settings for low CPU usage
-          echo "Starting 30-second recording with CPU Optimizations..."
-          ffmpeg -y -f x11grab -video_size 1280x720 -framerate 24 -draw_mouse 0 -i :99 \
+          # 4. Ultra-Optimized Recording (480p, 20fps)
+          echo "Starting 30-second optimized recording..."
+          ffmpeg -y -f x11grab -video_size 854x480 -framerate 20 -draw_mouse 0 -i :99 \
           -f pulse -i default \
-          -t 30 -c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p \
-          -c:a aac -b:a 128k -threads 2 bypass_record.mp4
+          -t 35 -c:v libx264 -preset ultrafast -crf 30 -pix_fmt yuv420p \
+          -c:a aac -b:a 96k -threads 2 bypass_record.mp4
 
       - name: Upload Recording Artifact
         if: always()
