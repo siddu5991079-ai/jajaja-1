@@ -84,7 +84,7 @@ puppeteer.use(StealthPlugin());
                 await streamPage.evaluate(() => {
                     const trap = document.querySelector('div#dontfoid');
                     if (trap) trap.remove();
-                    window.scrollBy({ top: 350, behavior: 'smooth' });
+                    window.scrollBy({ top: 400, behavior: 'smooth' });
                 });
                 
                 await new Promise(r => setTimeout(r, 2000));
