@@ -18,8 +18,8 @@ if (isMainThread) {
         const ffmpegWorker = new Worker(__filename);
 
         const proxyIpPort = '31.59.20.176:6754';
-        const proxyUser = 'cjasfidu';
-        const proxyPass = 'qhnyvm0qpf6p';
+        const proxyUser = 'jznxuitn';
+        const proxyPass = '4sp9smus5w8q';
 
         const browser = await puppeteer.launch({
             headless: false,
