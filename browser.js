@@ -138,44 +138,63 @@ if (isMainThread) {
                 for (const frame of page.frames()) {
                     if (playerFound) break;
                     try {
-                        const hooked = await frame.evaluate(async () => {
-                            // Sab video tags ko dhundo
-                            const videos = Array.from(document.querySelectorAll('video'));
-                            let activeVideo = null;
-                            
-                            for (let v of videos) {
-                                // Agar video visually bari hai (matlab chupi hui nahi hai)
-                                if (v.videoWidth > 0 || v.offsetWidth > 0) {
-                                    activeVideo = v;
-                                    break;
-                                }
-                            }
+                       const hooked = await frame.evaluate(async () => {
+    // Page ya is iframe mein maujood sab videos uthao
+    const videos = Array.from(document.querySelectorAll('video'));
+    let targetVideo = null;
+    let maxArea = 0;
+    
+    for (let v of videos) {
+        // 1. Video ka size (Area) calculate karo
+        const rect = v.getBoundingClientRect();
+        const area = rect.width * rect.height;
+        
+        // 2. Sirf tab aage barho jab video thori badi ho (e.g., 300x200 se badi)
+        if (area > 60000) { 
+            
+            // 3. Check karo ke video mein data load ho chuka hai (readyState)
+            // aur kya yeh pichli mili hui video se badi hai
+            if (v.readyState > 0 && area > maxArea) {
+                
+                // 4. (Optional but strong) Check karo ke stream live blob hai kya?
+                // Zyada tar live streams blob use karti hain
+                const isBlob = v.src.startsWith('blob:') || (v.currentSrc && v.currentSrc.startsWith('blob:'));
+                
+                // Agar aapko sirf blob streams chahiye toh if(isBlob) ki shart laga dein
+                // Filhal hum sabse badi active video ko target kar rahe hain
+                maxArea = area;
+                targetVideo = v;
+            }
+        }
+    }
 
-                            if (activeVideo) {
-                                try {
-                                    activeVideo.play().catch(e => console.log("Play blocked:", e));
-                                    
-                                    const stream = activeVideo.captureStream();
-                                    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8,opus' });
-                                    
-                                    recorder.ondataavailable = async (e) => {
-                                        if (e.data.size > 0) {
-                                            const reader = new FileReader();
-                                            reader.readAsDataURL(e.data);
-                                            reader.onloadend = () => {
-                                                const base64 = reader.result.split(',')[1];
-                                                window.sendToWorker2(base64);
-                                            }
-                                        }
-                                    };
-                                    recorder.start(2000);
-                                    return true;
-                                } catch (err) {
-                                    return false;
-                                }
-                            }
-                            return false;
-                        });
+    if (targetVideo) {
+        try {
+            console.log("Found Target Video! Size:", targetVideo.videoWidth, "x", targetVideo.videoHeight);
+            targetVideo.play().catch(e => console.log("Play blocked:", e));
+            
+            // Ab yahan se recording shuru hogi
+            const stream = targetVideo.captureStream();
+            const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8,opus' });
+            
+            recorder.ondataavailable = async (e) => {
+                if (e.data.size > 0) {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(e.data);
+                    reader.onloadend = () => {
+                        const base64 = reader.result.split(',')[1];
+                        window.sendToWorker2(base64); // Worker ko data bhej do
+                    }
+                }
+            };
+            recorder.start(2000);
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
+    return false;
+});
                         
                         if (hooked) {
                             console.log("[SUCCESS] MediaRecorder hooked to REAL video successfully!");
