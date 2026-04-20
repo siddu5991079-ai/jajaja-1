@@ -1,212 +1,372 @@
-const { Worker, isMainThread, parentPort } = require('worker_threads');
-const fs = require('fs');
 
-if (isMainThread) {
-    // =====================================================================
-    // WORKER 1: MAIN THREAD (PUPPETEER & STREAM CAPTURE)
-    // =====================================================================
-    const puppeteer = require('puppeteer-extra');
-    const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-    puppeteer.use(StealthPlugin());
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
-    // Purani test video delete karo
-    if (fs.existsSync('output_test.mp4')) fs.unlinkSync('output_test.mp4');
+puppeteer.use(StealthPlugin());
 
-    (async () => {
-        console.log("\n=======================================================");
-        console.log("[Worker 1] Launching Browser for MP4 Capture Test...");
-        console.log("=======================================================\n");
+(async () => {
+    console.log("Launching Browser for 720p Optical Capture...");
 
-        // Worker 2 ko start karo
-        const ffmpegWorker = new Worker(__filename);
+    // Yahan apni working proxy confirm kar lijiye ga
+    const proxyIpPort = '31.59.20.176:6754'; 
+    const proxyUser = 'jznxuitn';
+    const proxyPass = '4sp9smus5w8q';
 
-        const proxyIpPort = '31.59.20.176:6754';
-        const proxyUser = 'jznxuitn';
-        const proxyPass = '4sp9smus5w8q';
-        
-        // Target URL
-        const targetUrl = process.env.STREAM_URL || 'https://crichd.com.co/'; 
+    const browser = await puppeteer.launch({
+        headless: false,
+        defaultViewport: { width: 1280, height: 720 },
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-web-security',
+            '--window-size=1280,720',
+            '--autoplay-policy=no-user-gesture-required',
+            `--proxy-server=http://${proxyIpPort}`
+        ]
+    });
 
-        let browser;
-        try {
-            browser = await puppeteer.launch({
-                headless: false,
-                defaultViewport: { width: 1280, height: 720 },
-                args: [
-                    '--no-sandbox', 
-                    '--disable-setuid-sandbox',
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process',
-                    '--autoplay-policy=no-user-gesture-required',
-                    `--proxy-server=http://${proxyIpPort}`
-                ]
-            });
-        } catch (err) {
-            console.log(`[ERROR] Browser launch failed: ${err.message}`);
-            return;
+    const page = await browser.newPage();
+    await page.authenticate({ username: proxyUser, password: proxyPass });
+    console.log("Proxy credentials applied.");
+
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
+
+    try {
+        console.log("Navigating to Homepage...");
+        await page.goto('https://dadocric.st/player.php?id=starsp3&v=m', { waitUntil: 'networkidle2', timeout: 60000 });
+        await new Promise(r => setTimeout(r, 4000));
+
+        const cricketSelector = 'a[href="/index.php?cat=Cricket"]';
+        await page.waitForSelector(cricketSelector, { visible: true, timeout: 10000 });
+        const cricketBtn = await page.$(cricketSelector);
+        if (cricketBtn) {
+            const box = await cricketBtn.boundingBox();
+            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
+            await new Promise(r => setTimeout(r, 1000));
+            await Promise.all([
+                page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
+                page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+            ]);
         }
 
-        const page = await browser.newPage();
-        
-        try {
-            await page.authenticate({ username: proxyUser, password: proxyPass });
-        } catch(err) {}
+        console.log("Scrolling and clicking IPL match...");
+        await page.waitForSelector('div.schedule__event', { visible: true, timeout: 15000 });
+        await page.mouse.wheel({ deltaY: 600 });
+        await new Promise(r => setTimeout(r, 2000));
 
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
-
-        // Data Radar Setup - Worker 2 ko data bhejne ke liye
-        let chunkCount = 0;
-        await page.exposeFunction('sendToWorker2', (base64Chunk) => {
-            chunkCount++;
-            console.log(`[DATA RADAR] Chunk #${chunkCount} captured and sent to Worker 2.`);
-            ffmpegWorker.postMessage({ type: 'VIDEO_CHUNK', data: base64Chunk });
+        const targetMatch = await page.evaluateHandle(() => {
+            const events = Array.from(document.querySelectorAll('div.schedule__event'));
+            return events.find(el => el.textContent.includes('Indian Premier League'));
         });
 
-        try {
-            console.log(`\n[STEP 1] Navigating to Target URL: ${targetUrl}`);
-            await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-            
-            console.log("[STEP 2] Waiting 15 seconds for stream and iframes to load...");
-            await new Promise(r => setTimeout(r, 15000));
+        const box = await targetMatch.boundingBox();
+        if (box) {
+            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
+            await new Promise(r => setTimeout(r, 1000));
+            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 
-            // Aggressive Unmute Logic
-            console.log("[STEP 3] Attempting to unmute and play...");
-            for (const frame of page.frames()) {
-                try {
-                    await frame.evaluate(() => {
-                        const overlay = Array.from(document.querySelectorAll('div, span, a, button'))
-                            .find(el => el.innerText && el.innerText.toUpperCase().includes('CLICK HERE TO UNMUTE'));
-                        if (overlay) overlay.click();
+            console.log("Clicking 'Willow 2 Cricket'...");
+            const willowSelector = 'a[data-ch="willow 2 cricket"]';
+            await page.waitForSelector(willowSelector, { visible: true, timeout: 10000 });
+            const willowBtn = await page.$(willowSelector);
+
+            if (willowBtn) {
+                const wBox = await willowBtn.boundingBox();
+                await page.mouse.move(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2, { steps: 15 });
+                await new Promise(r => setTimeout(r, 1000));
+
+                const newPagePromise = new Promise(x => browser.once('targetcreated', target => x(target.page())));
+                await page.mouse.click(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2);
+
+                const streamPage = await newPagePromise;
+                if (streamPage) {
+                    console.log("Shifted to Stream Tab! Injecting Anti-Popup...");
+                    await streamPage.bringToFront();
+
+                    await streamPage.evaluateOnNewDocument(() => { window.open = () => null; });
+                    await new Promise(r => setTimeout(r, 12000));
+
+                    console.log("Destroying Ad-Trap and unmuting...");
+                    await streamPage.evaluate(() => {
+                        const trap = document.querySelector('div#dontfoid');
+                        if (trap) trap.remove();
                     });
-                } catch (error) {}
-            }
-            
-            await new Promise(r => setTimeout(r, 3000));
 
-            console.log("\n[STEP 4] Hunting for the REAL Live Stream (blob:)...");
-            let playerFound = false;
-            
-            for (let attempt = 1; attempt <= 3; attempt++) {
-                if (playerFound) break;
-                console.log(`[INFO] Deep Iframe Search (Attempt ${attempt}/3)...`);
-                
-                for (const frame of page.frames()) {
-                    if (playerFound) break;
-                    try {
-                        const hooked = await frame.evaluate(async () => {
-                            const videos = Array.from(document.querySelectorAll('video'));
-                            let targetVideo = null;
-                            let maxArea = 0;
-                            
-                            for (let v of videos) {
-                                const rect = v.getBoundingClientRect();
-                                const area = rect.width * rect.height;
-                                
-                                // Sirf badi video aur jiska source "blob:" ho (Yani asli live stream)
-                                const isBlob = v.src.startsWith('blob:') || (v.currentSrc && v.currentSrc.startsWith('blob:'));
-                                
-                                if (area > 30000 && isBlob) { 
-                                    maxArea = area;
-                                    targetVideo = v;
-                                }
-                            }
+                    await new Promise(r => setTimeout(r, 3000));
 
-                            if (targetVideo) {
-                                try {
-                                    targetVideo.muted = false;
-                                    targetVideo.volume = 1.0;
-                                    targetVideo.play().catch(e => console.log("Play blocked:", e));
-                                    
-                                    const stream = targetVideo.captureStream();
-                                    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8,opus' });
-                                    
-                                    recorder.ondataavailable = async (e) => {
-                                        if (e.data.size > 0) {
-                                            const reader = new FileReader();
-                                            reader.readAsDataURL(e.data);
-                                            reader.onloadend = () => {
-                                                const base64 = reader.result.split(',')[1];
-                                                window.sendToWorker2(base64);
-                                            }
-                                        }
-                                    };
-                                    recorder.start(2000); // Har 2 sec baad chunk bhejo
-                                    return true;
-                                } catch (err) { return false; }
-                            }
-                            return false;
-                        });
-                        
-                        if (hooked) {
-                            console.log("[SUCCESS] Asli Live Stream mil gayi aur MediaRecorder attach ho gaya!");
-                            playerFound = true;
-                        }
-                    } catch (e) {}
+                    for (const frame of streamPage.frames()) {
+                        try {
+                            await frame.evaluate(() => {
+                                const unmuteBtn = document.querySelector('#UnMutePlayer button');
+                                if (unmuteBtn) unmuteBtn.click();
+                            });
+                        } catch (error) {}
+                    }
+
+                    console.log("SUCCESS! Video unmuted. Leaving browser open for FFmpeg Capture...");
+                    // Browser 5 ghante tak open rahega
+                    await new Promise(r => setTimeout(r, 18000000));
                 }
-                
-                if(!playerFound) await new Promise(r => setTimeout(r, 5000));
             }
-
-            if (!playerFound) {
-                console.log("\n[ERROR] Asli video nahi mili.");
-            } else {
-                // ==========================================
-                // 20 SECONDS TEST TIMER
-                // ==========================================
-                console.log("\n[STEP 5] ⏳ Recording for exactly 20 SECONDS (Test Mode)...");
-                await new Promise(r => setTimeout(r, 20000)); 
-                console.log("\n⏰ [COMPLETED] 20 Seconds Test Over.");
-            }
-
-        } catch (error) {
-            console.log("\n[ERROR] Execution stopped:", error.message);
+        } else {
+            console.log("IPL Match nahi mila.");
         }
 
-        console.log("\n[STEP 6] Closing browser and saving MP4 file...");
-        ffmpegWorker.postMessage({ type: 'STOP' });
-        await browser.close();
-    })();
-} 
-else {
-    // =====================================================================
-    // WORKER 2: BACKGROUND THREAD (FFMPEG TO MP4 CONVERTER)
-    // =====================================================================
-    const { spawn } = require('child_process');
+    } catch (error) {
+        console.log("Execution stopped or error occurred:", error.message);
+    }
 
-    // RTMP ki jagah ab hum local file (output_test.mp4) bana rahe hain
-    const ffmpeg = spawn('ffmpeg', [
-        '-y',               // Agar pehle se output_test.mp4 maujood ho toh usay overwrite (replace) kar do
-        '-i', 'pipe:0',     // Input Node.js ki pipe (stdin) se aayega
-        '-c:v', 'libx264',  // Video ko standard MP4 format (H.264) mein encode karo
-        '-preset', 'fast',  // Encoding speed
-        '-crf', '28',       // Quality (Kam number = achi quality. 28 normal hai)
-        '-c:a', 'aac',      // Audio ko AAC format mein encode karo
-        '-b:a', '128k',     // Audio bitrate
-        'output_test.mp4'   // Output file ka naam!
-    ]);
+    console.log("Closing browser...");
+    await browser.close();
+})();
 
-    parentPort.on('message', (msg) => {
-        if (msg.type === 'VIDEO_CHUNK') {
-            // Buffer bana kar FFmpeg ke mooh (stdin) mein daalo
-            const buffer = Buffer.from(msg.data, 'base64');
-            ffmpeg.stdin.write(buffer); 
-        } else if (msg.type === 'STOP') {
-            console.log("[Worker 2] Video data aana band ho gaya. MP4 file save ki ja rahi hai...");
-            ffmpeg.stdin.end(); // FFmpeg ko batao ke data aana khatam ho gaya hai
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// # ========== Again recording par wapas agye opper walaa code recording =========================
+
+
+
+
+
+
+// const { Worker, isMainThread, parentPort } = require('worker_threads');
+// const fs = require('fs');
+
+// if (isMainThread) {
+//     // =====================================================================
+//     // WORKER 1: MAIN THREAD (PUPPETEER & STREAM CAPTURE)
+//     // =====================================================================
+//     const puppeteer = require('puppeteer-extra');
+//     const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+//     puppeteer.use(StealthPlugin());
+
+//     // Purani test video delete karo
+//     if (fs.existsSync('output_test.mp4')) fs.unlinkSync('output_test.mp4');
+
+//     (async () => {
+//         console.log("\n=======================================================");
+//         console.log("[Worker 1] Launching Browser for MP4 Capture Test...");
+//         console.log("=======================================================\n");
+
+//         // Worker 2 ko start karo
+//         const ffmpegWorker = new Worker(__filename);
+
+//         const proxyIpPort = '31.59.20.176:6754';
+//         const proxyUser = 'jznxuitn';
+//         const proxyPass = '4sp9smus5w8q';
+        
+//         // Target URL
+//         const targetUrl = process.env.STREAM_URL || 'https://crichd.com.co/'; 
+
+//         let browser;
+//         try {
+//             browser = await puppeteer.launch({
+//                 headless: false,
+//                 defaultViewport: { width: 1280, height: 720 },
+//                 args: [
+//                     '--no-sandbox', 
+//                     '--disable-setuid-sandbox',
+//                     '--disable-web-security',
+//                     '--disable-features=IsolateOrigins,site-per-process',
+//                     '--autoplay-policy=no-user-gesture-required',
+//                     `--proxy-server=http://${proxyIpPort}`
+//                 ]
+//             });
+//         } catch (err) {
+//             console.log(`[ERROR] Browser launch failed: ${err.message}`);
+//             return;
+//         }
+
+//         const page = await browser.newPage();
+        
+//         try {
+//             await page.authenticate({ username: proxyUser, password: proxyPass });
+//         } catch(err) {}
+
+//         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
+
+//         // Data Radar Setup - Worker 2 ko data bhejne ke liye
+//         let chunkCount = 0;
+//         await page.exposeFunction('sendToWorker2', (base64Chunk) => {
+//             chunkCount++;
+//             console.log(`[DATA RADAR] Chunk #${chunkCount} captured and sent to Worker 2.`);
+//             ffmpegWorker.postMessage({ type: 'VIDEO_CHUNK', data: base64Chunk });
+//         });
+
+//         try {
+//             console.log(`\n[STEP 1] Navigating to Target URL: ${targetUrl}`);
+//             await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
             
-            // Jab FFmpeg file save karke close ho jaye, tab process exit karo
-            ffmpeg.on('close', () => {
-                console.log("✅ [SUCCESS] File 'output_test.mp4' successfully save ho gayi hai!");
-                process.exit(0);
-            });
-        }
-    });
+//             console.log("[STEP 2] Waiting 15 seconds for stream and iframes to load...");
+//             await new Promise(r => setTimeout(r, 15000));
 
-    // Agar FFmpeg mein koi error aaye toh yahan print hoga (Debugging ke liye)
-    ffmpeg.stderr.on('data', (data) => {
-        // console.log(`FFmpeg Log: ${data}`); // Agar aapko FFmpeg ki logs dekhni hon toh ise uncomment karein
-    });
-}
+//             // Aggressive Unmute Logic
+//             console.log("[STEP 3] Attempting to unmute and play...");
+//             for (const frame of page.frames()) {
+//                 try {
+//                     await frame.evaluate(() => {
+//                         const overlay = Array.from(document.querySelectorAll('div, span, a, button'))
+//                             .find(el => el.innerText && el.innerText.toUpperCase().includes('CLICK HERE TO UNMUTE'));
+//                         if (overlay) overlay.click();
+//                     });
+//                 } catch (error) {}
+//             }
+            
+//             await new Promise(r => setTimeout(r, 3000));
+
+//             console.log("\n[STEP 4] Hunting for the REAL Live Stream (blob:)...");
+//             let playerFound = false;
+            
+//             for (let attempt = 1; attempt <= 3; attempt++) {
+//                 if (playerFound) break;
+//                 console.log(`[INFO] Deep Iframe Search (Attempt ${attempt}/3)...`);
+                
+//                 for (const frame of page.frames()) {
+//                     if (playerFound) break;
+//                     try {
+//                         const hooked = await frame.evaluate(async () => {
+//                             const videos = Array.from(document.querySelectorAll('video'));
+//                             let targetVideo = null;
+//                             let maxArea = 0;
+                            
+//                             for (let v of videos) {
+//                                 const rect = v.getBoundingClientRect();
+//                                 const area = rect.width * rect.height;
+                                
+//                                 // Sirf badi video aur jiska source "blob:" ho (Yani asli live stream)
+//                                 const isBlob = v.src.startsWith('blob:') || (v.currentSrc && v.currentSrc.startsWith('blob:'));
+                                
+//                                 if (area > 30000 && isBlob) { 
+//                                     maxArea = area;
+//                                     targetVideo = v;
+//                                 }
+//                             }
+
+//                             if (targetVideo) {
+//                                 try {
+//                                     targetVideo.muted = false;
+//                                     targetVideo.volume = 1.0;
+//                                     targetVideo.play().catch(e => console.log("Play blocked:", e));
+                                    
+//                                     const stream = targetVideo.captureStream();
+//                                     const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8,opus' });
+                                    
+//                                     recorder.ondataavailable = async (e) => {
+//                                         if (e.data.size > 0) {
+//                                             const reader = new FileReader();
+//                                             reader.readAsDataURL(e.data);
+//                                             reader.onloadend = () => {
+//                                                 const base64 = reader.result.split(',')[1];
+//                                                 window.sendToWorker2(base64);
+//                                             }
+//                                         }
+//                                     };
+//                                     recorder.start(2000); // Har 2 sec baad chunk bhejo
+//                                     return true;
+//                                 } catch (err) { return false; }
+//                             }
+//                             return false;
+//                         });
+                        
+//                         if (hooked) {
+//                             console.log("[SUCCESS] Asli Live Stream mil gayi aur MediaRecorder attach ho gaya!");
+//                             playerFound = true;
+//                         }
+//                     } catch (e) {}
+//                 }
+                
+//                 if(!playerFound) await new Promise(r => setTimeout(r, 5000));
+//             }
+
+//             if (!playerFound) {
+//                 console.log("\n[ERROR] Asli video nahi mili.");
+//             } else {
+//                 // ==========================================
+//                 // 20 SECONDS TEST TIMER
+//                 // ==========================================
+//                 console.log("\n[STEP 5] ⏳ Recording for exactly 20 SECONDS (Test Mode)...");
+//                 await new Promise(r => setTimeout(r, 20000)); 
+//                 console.log("\n⏰ [COMPLETED] 20 Seconds Test Over.");
+//             }
+
+//         } catch (error) {
+//             console.log("\n[ERROR] Execution stopped:", error.message);
+//         }
+
+//         console.log("\n[STEP 6] Closing browser and saving MP4 file...");
+//         ffmpegWorker.postMessage({ type: 'STOP' });
+//         await browser.close();
+//     })();
+// } 
+// else {
+//     // =====================================================================
+//     // WORKER 2: BACKGROUND THREAD (FFMPEG TO MP4 CONVERTER)
+//     // =====================================================================
+//     const { spawn } = require('child_process');
+
+//     // RTMP ki jagah ab hum local file (output_test.mp4) bana rahe hain
+//     const ffmpeg = spawn('ffmpeg', [
+//         '-y',               // Agar pehle se output_test.mp4 maujood ho toh usay overwrite (replace) kar do
+//         '-i', 'pipe:0',     // Input Node.js ki pipe (stdin) se aayega
+//         '-c:v', 'libx264',  // Video ko standard MP4 format (H.264) mein encode karo
+//         '-preset', 'fast',  // Encoding speed
+//         '-crf', '28',       // Quality (Kam number = achi quality. 28 normal hai)
+//         '-c:a', 'aac',      // Audio ko AAC format mein encode karo
+//         '-b:a', '128k',     // Audio bitrate
+//         'output_test.mp4'   // Output file ka naam!
+//     ]);
+
+//     parentPort.on('message', (msg) => {
+//         if (msg.type === 'VIDEO_CHUNK') {
+//             // Buffer bana kar FFmpeg ke mooh (stdin) mein daalo
+//             const buffer = Buffer.from(msg.data, 'base64');
+//             ffmpeg.stdin.write(buffer); 
+//         } else if (msg.type === 'STOP') {
+//             console.log("[Worker 2] Video data aana band ho gaya. MP4 file save ki ja rahi hai...");
+//             ffmpeg.stdin.end(); // FFmpeg ko batao ke data aana khatam ho gaya hai
+            
+//             // Jab FFmpeg file save karke close ho jaye, tab process exit karo
+//             ffmpeg.on('close', () => {
+//                 console.log("✅ [SUCCESS] File 'output_test.mp4' successfully save ho gayi hai!");
+//                 process.exit(0);
+//             });
+//         }
+//     });
+
+//     // Agar FFmpeg mein koi error aaye toh yahan print hoga (Debugging ke liye)
+//     ffmpeg.stderr.on('data', (data) => {
+//         // console.log(`FFmpeg Log: ${data}`); // Agar aapko FFmpeg ki logs dekhni hon toh ise uncomment karein
+//     });
+// }
 
 
 
