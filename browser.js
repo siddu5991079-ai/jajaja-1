@@ -1,16 +1,20 @@
-
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 puppeteer.use(StealthPlugin());
 
 (async () => {
-    console.log("Launching Browser for 720p Optical Capture...");
+    console.log("Launching Browser for Direct Stream Capture...");
 
-    // Yahan apni working proxy confirm kar lijiye ga
+    // Aapki Proxy Details
     const proxyIpPort = '31.59.20.176:6754'; 
     const proxyUser = 'jznxuitn';
     const proxyPass = '4sp9smus5w8q';
+    
+    // ========================================================
+    // YAHAN APNA DIRECT VIDEO / IFRAME WALA URL DALEIN
+    // ========================================================
+    const DIRECT_URL = 'https://dadocric.st/player.php?id=starsp3&v=m'; 
 
     const browser = await puppeteer.launch({
         headless: false,
@@ -21,6 +25,10 @@ puppeteer.use(StealthPlugin());
             '--disable-web-security',
             '--window-size=1280,720',
             '--autoplay-policy=no-user-gesture-required',
+            // Black Screen Fix Flags
+            '--disable-gpu', 
+            '--disable-software-rasterizer',
+            '--disable-dev-shm-usage', 
             `--proxy-server=http://${proxyIpPort}`
         ]
     });
@@ -32,85 +40,50 @@ puppeteer.use(StealthPlugin());
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
 
     try {
-        console.log("Navigating to Homepage...");
-        await page.goto('https://dadocric.st/player.php?id=starsp3&v=m', { waitUntil: 'networkidle2', timeout: 60000 });
-        await new Promise(r => setTimeout(r, 4000));
+        console.log(`Navigating directly to: ${DIRECT_URL}`);
+        await page.goto(DIRECT_URL, { waitUntil: 'networkidle2', timeout: 60000 });
+        
+        console.log("Waiting 10 seconds for video/iframe to fully load...");
+        await new Promise(r => setTimeout(r, 10000)); 
 
-        const cricketSelector = 'a[href="/index.php?cat=Cricket"]';
-        await page.waitForSelector(cricketSelector, { visible: true, timeout: 10000 });
-        const cricketBtn = await page.$(cricketSelector);
-        if (cricketBtn) {
-            const box = await cricketBtn.boundingBox();
-            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
-            await new Promise(r => setTimeout(r, 1000));
-            await Promise.all([
-                page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
-                page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
-            ]);
-        }
-
-        console.log("Scrolling and clicking IPL match...");
-        await page.waitForSelector('div.schedule__event', { visible: true, timeout: 15000 });
-        await page.mouse.wheel({ deltaY: 600 });
-        await new Promise(r => setTimeout(r, 2000));
-
-        const targetMatch = await page.evaluateHandle(() => {
-            const events = Array.from(document.querySelectorAll('div.schedule__event'));
-            return events.find(el => el.textContent.includes('Indian Premier League'));
+        console.log("Destroying Ad-Traps (if any) and unmuting...");
+        
+        // Agar direct link par bhi koi invisible ad trap ho toh nikal dega
+        await page.evaluate(() => {
+            const trap = document.querySelector('div#dontfoid');
+            if (trap) trap.remove();
         });
 
-        const box = await targetMatch.boundingBox();
-        if (box) {
-            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
-            await new Promise(r => setTimeout(r, 1000));
-            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+        await new Promise(r => setTimeout(r, 3000));
 
-            console.log("Clicking 'Willow 2 Cricket'...");
-            const willowSelector = 'a[data-ch="willow 2 cricket"]';
-            await page.waitForSelector(willowSelector, { visible: true, timeout: 10000 });
-            const willowBtn = await page.$(willowSelector);
-
-            if (willowBtn) {
-                const wBox = await willowBtn.boundingBox();
-                await page.mouse.move(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2, { steps: 15 });
-                await new Promise(r => setTimeout(r, 1000));
-
-                const newPagePromise = new Promise(x => browser.once('targetcreated', target => x(target.page())));
-                await page.mouse.click(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2);
-
-                const streamPage = await newPagePromise;
-                if (streamPage) {
-                    console.log("Shifted to Stream Tab! Injecting Anti-Popup...");
-                    await streamPage.bringToFront();
-
-                    await streamPage.evaluateOnNewDocument(() => { window.open = () => null; });
-                    await new Promise(r => setTimeout(r, 12000));
-
-                    console.log("Destroying Ad-Trap and unmuting...");
-                    await streamPage.evaluate(() => {
-                        const trap = document.querySelector('div#dontfoid');
-                        if (trap) trap.remove();
-                    });
-
-                    await new Promise(r => setTimeout(r, 3000));
-
-                    for (const frame of streamPage.frames()) {
-                        try {
-                            await frame.evaluate(() => {
-                                const unmuteBtn = document.querySelector('#UnMutePlayer button');
-                                if (unmuteBtn) unmuteBtn.click();
-                            });
-                        } catch (error) {}
+        // Player ko unmute karne ka logic (Iframes ke andar bhi check karega)
+        for (const frame of page.frames()) {
+            try {
+                await frame.evaluate(() => {
+                    // Agar specific unmute button hai
+                    const unmuteBtn = document.querySelector('#UnMutePlayer button');
+                    if (unmuteBtn) unmuteBtn.click();
+                    
+                    // Agar direct video tag hai, toh usko force unmute aur play karega
+                    const video = document.querySelector('video');
+                    if(video) {
+                        video.muted = false;
+                        video.play().catch(e => console.log("Auto-play blocked, waiting for gesture"));
                     }
-
-                    console.log("SUCCESS! Video unmuted. Leaving browser open for FFmpeg Capture...");
-                    // Browser 5 ghante tak open rahega
-                    await new Promise(r => setTimeout(r, 18000000));
-                }
-            }
-        } else {
-            console.log("IPL Match nahi mila.");
+                });
+            } catch (error) {}
         }
+
+        console.log("SUCCESS! Video unmuted.");
+        
+        // FFmpeg record shuru hone ke doran evidence picture
+        await new Promise(r => setTimeout(r, 5000)); 
+        console.log("📸 Taking evidence screenshot...");
+        await page.screenshot({ path: 'evidence_screen.png' });
+        console.log("✅ Evidence Saved! Leaving browser open for FFmpeg capture...");
+
+        // Browser 5 ghante tak open rahega
+        await new Promise(r => setTimeout(r, 18000000));
 
     } catch (error) {
         console.log("Execution stopped or error occurred:", error.message);
@@ -118,6 +91,7 @@ puppeteer.use(StealthPlugin());
 
     console.log("Closing browser...");
     await browser.close();
+})();
 })();
 
 
