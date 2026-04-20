@@ -25,22 +25,90 @@ jobs:
         run: |
           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
 
-      - name: Start Advanced Broadcast (Worker Threads)
+      - name: Start Diagnostic Broadcast
         run: |
           Xvfb :99 -screen 0 1280x720x24 &
           export DISPLAY=:99
           sleep 3
-          echo "Starting Node.js Broadcaster with Worker Threads..."
+          echo "Starting Node.js Broadcaster..."
           node browser.js
 
-      # NAYA STEP: 65 Second par li gayi screenshot ko GitHub par upload karna
-      - name: Upload Screenshot to GitHub
-        if: always() # Yeh always() isliye hai taake agar code crash bhi ho tab bhi image upload ho jaye
+      # NAYA STEP: Source Check file ko upload karna
+      - name: Upload Diagnostic Source Video
+        if: always() 
         uses: actions/upload-artifact@v4
         with:
-          name: Stream-Snapshot-65s
-          path: stream_screenshot.png
+          name: Source-Debug-Video
+          path: debug_source.webm
           retention-days: 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# name: Project12 Live Stream Bypass & Record
+
+# on:
+#   workflow_dispatch:
+
+# jobs:
+#   bypass-and-broadcast:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
+
+#       - name: Install System Dependencies
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y xvfb ffmpeg libgbm-dev
+
+#       - name: Install Puppeteer & Stealth
+#         run: |
+#           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
+
+#       - name: Start Advanced Broadcast (Worker Threads)
+#         run: |
+#           Xvfb :99 -screen 0 1280x720x24 &
+#           export DISPLAY=:99
+#           sleep 3
+#           echo "Starting Node.js Broadcaster with Worker Threads..."
+#           node browser.js
+
+#       # NAYA STEP: 65 Second par li gayi screenshot ko GitHub par upload karna
+#       - name: Upload Screenshot to GitHub
+#         if: always() # Yeh always() isliye hai taake agar code crash bhi ho tab bhi image upload ho jaye
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: Stream-Snapshot-65s
+#           path: stream_screenshot.png
+#           retention-days: 1
 
 
 
