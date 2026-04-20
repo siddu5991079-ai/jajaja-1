@@ -1,4 +1,5 @@
 const { Worker, isMainThread, parentPort } = require('worker_threads');
+const fs = require('fs'); // DIAGNOSTIC: File system for checking source data
 
 // =====================================================================
 // WORKER 1: MAIN THREAD (PUPPETEER & DATA EXTRACTION)
@@ -8,8 +9,11 @@ if (isMainThread) {
     const StealthPlugin = require('puppeteer-extra-plugin-stealth');
     puppeteer.use(StealthPlugin());
 
+    // DIAGNOSTIC: Pehle se agar koi purani test file hai toh usay delete kar do
+    if (fs.existsSync('debug_source.webm')) fs.unlinkSync('debug_source.webm');
+
     (async () => {
-        console.log("[Worker 1] Launching Browser for ZERO-LAG Live Broadcast...");
+        console.log("[Worker 1] Launching Browser in DIAGNOSTIC MODE...");
 
         const ffmpegWorker = new Worker(__filename);
 
@@ -38,16 +42,20 @@ if (isMainThread) {
 
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
 
-        // ============================================================
-        // UPDATE 1: DATA TRACKER (Checking if video is actually flowing)
-        // ============================================================
-        let chunkCounter = 0;
+        // =========================================================
+        // DATA RADAR: Yahan check hoga ke data aa raha hai ya nahi
+        // =========================================================
+        let chunkCount = 0;
         await page.exposeFunction('sendToWorker2', (base64Chunk) => {
-            chunkCounter++;
-            // Har 5th chunk (yani 5 seconds baad) terminal mein print karega
-            if (chunkCounter % 5 === 0) {
-                console.log(`[DATA RADAR] Chunk #${chunkCounter} flowing to FFmpeg | Size: ${base64Chunk.length} bytes`);
-            }
+            chunkCount++;
+            const buffer = Buffer.from(base64Chunk, 'base64');
+            
+            // Terminal mein print karega
+            console.log(`[DATA RADAR] Chunk #${chunkCount} captured. Size: ${buffer.length} bytes`);
+            
+            // Local hard drive mein save karega (Source check karne ke liye)
+            fs.appendFileSync('debug_source.webm', buffer);
+            
             ffmpegWorker.postMessage({ type: 'VIDEO_CHUNK', data: base64Chunk });
         });
 
@@ -123,7 +131,7 @@ if (isMainThread) {
                             } catch (error) {}
                         }
                         
-                        console.log("[Worker 1] Video unmuted. Piping stream to Worker 2...");
+                        console.log("[Worker 1] Hooking Native MediaRecorder to Player...");
                         
                         for (const frame of streamPage.frames()) {
                             try {
@@ -141,29 +149,21 @@ if (isMainThread) {
                                                     const base64 = reader.result.split(',')[1];
                                                     window.sendToWorker2(base64);
                                                 }
+                                            } else {
+                                                console.log("ALERT: Captured chunk is 0 bytes!");
                                             }
                                         };
-                                        recorder.start(1000); 
+                                        recorder.start(2000); // 2 second chunks
                                     }
                                 });
                             } catch (e) {}
                         }
 
-                        setTimeout(async () => {
-                            try {
-                                console.log("\n=======================================================");
-                                console.log("⏰ PRINT STATEMENT: 1 Min 5 Sec (65s) ho gaye hain!");
-                                console.log("📸 Taking screenshot of the Live Player now...");
-                                await streamPage.screenshot({ path: 'stream_screenshot.png', fullPage: true });
-                                console.log("✅ Screenshot successfully saved as 'stream_screenshot.png'");
-                                console.log("=======================================================\n");
-                            } catch (err) {
-                                console.log("Screenshot error:", err.message);
-                            }
-                        }, 65000); 
-
-                        console.log("Stream is LIVE on ok.ru! Waiting for background tasks...");
-                        await new Promise(r => setTimeout(r, 18000000)); 
+                        // Hum is diagnostic test ko sirf 2 minute chalayenge, taake hum fauran file download kar ke dekh sakein.
+                        console.log("Test running for 2 minutes. Keep an eye on the DATA RADAR logs...");
+                        await new Promise(r => setTimeout(r, 120000)); 
+                        
+                        console.log("⏰ 2 Minutes Test Over. Saving debug file.");
                     }
                 }
             } else {
@@ -210,18 +210,257 @@ else {
         }
     });
 
-    // ============================================================
-    // UPDATE 2: FFMPEG LOGS ENABLED (Dekhein error kahan aa raha hai)
-    // ============================================================
     ffmpeg.stderr.on('data', (data) => {
-        const logMsg = data.toString().trim();
-        // Sirf zaroori errors aur connection issues print honge taake spam na ho
-        if(logMsg.toLowerCase().includes('error') || logMsg.toLowerCase().includes('failed') || logMsg.includes('rtmp')) {
-            console.log(`[FFMPEG ALERT] ${logMsg}`);
-        }
+        // Mute for now to focus on Data Radar
     });
-    
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// const { Worker, isMainThread, parentPort } = require('worker_threads');
+
+// // =====================================================================
+// // WORKER 1: MAIN THREAD (PUPPETEER & DATA EXTRACTION)
+// // =====================================================================
+// if (isMainThread) {
+//     const puppeteer = require('puppeteer-extra');
+//     const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+//     puppeteer.use(StealthPlugin());
+
+//     (async () => {
+//         console.log("[Worker 1] Launching Browser for ZERO-LAG Live Broadcast...");
+
+//         const ffmpegWorker = new Worker(__filename);
+
+//         const proxyIpPort = '31.59.20.176:6754';
+//         const proxyUser = 'cjasfidu';
+//         const proxyPass = 'qhnyvm0qpf6p';
+
+//         const browser = await puppeteer.launch({
+//             headless: false,
+//             defaultViewport: { width: 1280, height: 720 },
+//             args: [
+//                 '--no-sandbox', 
+//                 '--disable-setuid-sandbox',
+//                 '--disable-web-security',
+//                 '--disable-features=IsolateOrigins,site-per-process',
+//                 '--enable-experimental-web-platform-features',
+//                 '--window-size=1280,720',
+//                 '--autoplay-policy=no-user-gesture-required',
+//                 `--proxy-server=http://${proxyIpPort}`
+//             ]
+//         });
+
+//         const page = await browser.newPage();
+//         await page.authenticate({ username: proxyUser, password: proxyPass });
+//         console.log("Proxy credentials applied.");
+
+//         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
+
+//         // ============================================================
+//         // UPDATE 1: DATA TRACKER (Checking if video is actually flowing)
+//         // ============================================================
+//         let chunkCounter = 0;
+//         await page.exposeFunction('sendToWorker2', (base64Chunk) => {
+//             chunkCounter++;
+//             // Har 5th chunk (yani 5 seconds baad) terminal mein print karega
+//             if (chunkCounter % 5 === 0) {
+//                 console.log(`[DATA RADAR] Chunk #${chunkCounter} flowing to FFmpeg | Size: ${base64Chunk.length} bytes`);
+//             }
+//             ffmpegWorker.postMessage({ type: 'VIDEO_CHUNK', data: base64Chunk });
+//         });
+
+//         try {
+//             console.log("Navigating to Homepage...");
+//             await page.goto('https://dlstreams.com/', { waitUntil: 'networkidle2', timeout: 60000 });
+//             await new Promise(r => setTimeout(r, 4000));
+
+//             const cricketSelector = 'a[href="/index.php?cat=Cricket"]';
+//             await page.waitForSelector(cricketSelector, { visible: true, timeout: 10000 });
+//             const cricketBtn = await page.$(cricketSelector);
+//             if (cricketBtn) {
+//                 const box = await cricketBtn.boundingBox();
+//                 await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
+//                 await new Promise(r => setTimeout(r, 1000)); 
+//                 await Promise.all([
+//                     page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }), 
+//                     page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+//                 ]);
+//             }
+
+//             console.log("Scrolling and clicking IPL match...");
+//             await page.waitForSelector('div.schedule__event', { visible: true, timeout: 15000 });
+//             await page.mouse.wheel({ deltaY: 600 });
+//             await new Promise(r => setTimeout(r, 2000));
+
+//             const targetMatch = await page.evaluateHandle(() => {
+//                 const events = Array.from(document.querySelectorAll('div.schedule__event'));
+//                 return events.find(el => el.textContent.includes('Indian Premier League'));
+//             });
+
+//             const box = await targetMatch.boundingBox();
+//             if (box) {
+//                 await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
+//                 await new Promise(r => setTimeout(r, 1000)); 
+//                 await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+                
+//                 console.log("Clicking 'Willow 2 Cricket'...");
+//                 const willowSelector = 'a[data-ch="willow 2 cricket"]'; 
+//                 await page.waitForSelector(willowSelector, { visible: true, timeout: 10000 });
+//                 const willowBtn = await page.$(willowSelector);
+                
+//                 if (willowBtn) {
+//                     const wBox = await willowBtn.boundingBox();
+//                     await page.mouse.move(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2, { steps: 15 });
+//                     await new Promise(r => setTimeout(r, 1000)); 
+
+//                     const newPagePromise = new Promise(x => browser.once('targetcreated', target => x(target.page())));
+//                     await page.mouse.click(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2);
+                    
+//                     const streamPage = await newPagePromise;
+//                     if (streamPage) {
+//                         console.log("Shifted to Stream Tab! Injecting Anti-Popup...");
+//                         await streamPage.bringToFront();
+                        
+//                         await streamPage.evaluateOnNewDocument(() => { window.open = () => null; });
+//                         await new Promise(r => setTimeout(r, 12000)); 
+                        
+//                         console.log("Destroying Ad-Trap and unmuting...");
+//                         await streamPage.evaluate(() => {
+//                             const trap = document.querySelector('div#dontfoid');
+//                             if (trap) trap.remove();
+//                         });
+                        
+//                         await new Promise(r => setTimeout(r, 3000));
+                        
+//                         for (const frame of streamPage.frames()) {
+//                             try {
+//                                 await frame.evaluate(() => {
+//                                     const unmuteBtn = document.querySelector('#UnMutePlayer button');
+//                                     if (unmuteBtn) unmuteBtn.click();
+//                                 });
+//                             } catch (error) {}
+//                         }
+                        
+//                         console.log("[Worker 1] Video unmuted. Piping stream to Worker 2...");
+                        
+//                         for (const frame of streamPage.frames()) {
+//                             try {
+//                                 await frame.evaluate(() => {
+//                                     const video = document.querySelector('video');
+//                                     if (video) {
+//                                         const stream = video.captureStream();
+//                                         const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8,opus' });
+                                        
+//                                         recorder.ondataavailable = async (e) => {
+//                                             if (e.data.size > 0) {
+//                                                 const reader = new FileReader();
+//                                                 reader.readAsDataURL(e.data);
+//                                                 reader.onloadend = () => {
+//                                                     const base64 = reader.result.split(',')[1];
+//                                                     window.sendToWorker2(base64);
+//                                                 }
+//                                             }
+//                                         };
+//                                         recorder.start(1000); 
+//                                     }
+//                                 });
+//                             } catch (e) {}
+//                         }
+
+//                         setTimeout(async () => {
+//                             try {
+//                                 console.log("\n=======================================================");
+//                                 console.log("⏰ PRINT STATEMENT: 1 Min 5 Sec (65s) ho gaye hain!");
+//                                 console.log("📸 Taking screenshot of the Live Player now...");
+//                                 await streamPage.screenshot({ path: 'stream_screenshot.png', fullPage: true });
+//                                 console.log("✅ Screenshot successfully saved as 'stream_screenshot.png'");
+//                                 console.log("=======================================================\n");
+//                             } catch (err) {
+//                                 console.log("Screenshot error:", err.message);
+//                             }
+//                         }, 65000); 
+
+//                         console.log("Stream is LIVE on ok.ru! Waiting for background tasks...");
+//                         await new Promise(r => setTimeout(r, 18000000)); 
+//                     }
+//                 }
+//             } else {
+//                 console.log("IPL Match nahi mila.");
+//             }
+
+//         } catch (error) {
+//             console.log("Execution stopped or error occurred:", error.message);
+//         }
+
+//         console.log("Closing browser and stopping stream...");
+//         ffmpegWorker.postMessage({ type: 'STOP' });
+//         await browser.close();
+//     })();
+// } 
+// // =====================================================================
+// // WORKER 2: BACKGROUND THREAD (FFMPEG & OK.RU BROADCAST)
+// // =====================================================================
+// else {
+//     const { spawn } = require('child_process');
+
+//     console.log("[Worker 2] FFmpeg Broadcaster Online!");
+
+//     const rtmpUrl = 'rtmp://vsu.okcdn.ru/input/14601603391083_14040893622891_puxzrwjniu';
+
+//     const ffmpeg = spawn('ffmpeg', [
+//         '-i', 'pipe:0', 
+//         '-c:v', 'libx264', 
+//         '-preset', 'veryfast', 
+//         '-crf', '28', 
+//         '-c:a', 'aac', 
+//         '-b:a', '128k', 
+//         '-f', 'flv', 
+//         rtmpUrl 
+//     ]);
+
+//     parentPort.on('message', (msg) => {
+//         if (msg.type === 'VIDEO_CHUNK') {
+//             const buffer = Buffer.from(msg.data, 'base64');
+//             ffmpeg.stdin.write(buffer); 
+//         } else if (msg.type === 'STOP') {
+//             ffmpeg.stdin.end();
+//             process.exit(0);
+//         }
+//     });
+
+//     // ============================================================
+//     // UPDATE 2: FFMPEG LOGS ENABLED (Dekhein error kahan aa raha hai)
+//     // ============================================================
+//     ffmpeg.stderr.on('data', (data) => {
+//         const logMsg = data.toString().trim();
+//         // Sirf zaroori errors aur connection issues print honge taake spam na ho
+//         if(logMsg.toLowerCase().includes('error') || logMsg.toLowerCase().includes('failed') || logMsg.includes('rtmp')) {
+//             console.log(`[FFMPEG ALERT] ${logMsg}`);
+//         }
+//     });
+    
+// }
 
 
 
