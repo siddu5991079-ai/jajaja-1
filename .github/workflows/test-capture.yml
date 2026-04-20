@@ -1,4 +1,3 @@
-
 name: Project12 Live Stream Bypass & Record
 
 on:
@@ -20,35 +19,27 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          # pulseaudio-utils aur pulseaudio zaroori hain digital speaker banane ke liye
           sudo apt-get install -y xvfb ffmpeg libgbm-dev pulseaudio pulseaudio-utils
 
-      - name: Install Puppeteer & Stealth
+      - name: Install Puppeteer
         run: |
           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
 
-      - name: Setup 2026 Virtual Audio & Display
+      - name: Setup Virtual Audio & Display
         run: |
           # 1. Start Virtual Display for 720p Video
           Xvfb :99 -screen 0 1280x720x24 &
           export DISPLAY=:99
           sleep 2
 
-          # 2. Start Virtual Digital Speaker (The Audio Magic)
-          # Pehle se koi purana audio engine chal raha ho toh kill kar do
+          # 2. Start Virtual Digital Speaker (PulseAudio Magic)
           pulseaudio -k 2>/dev/null || true
-          
-          # Naya audio engine start karo
           pulseaudio -D --exit-idle-time=-1
           sleep 2
           
-          # Ek "VirtualSpeaker" ke naam se dummy sink (speaker) banao
+          # Virtual speaker create aur default set karna
           pactl load-module module-null-sink sink_name=VirtualSpeaker
-          
-          # Chrome ko batao ke default awaz is VirtualSpeaker mein bhejni hai
           pactl set-default-sink VirtualSpeaker
-          
-          # FFmpeg ko batao ke default awaz VirtualSpeaker.monitor se record karni hai
           pactl set-default-source VirtualSpeaker.monitor
 
       - name: Start Broadcast Pipeline
@@ -65,7 +56,7 @@ jobs:
           echo "Starting 720p HD Capture with Virtual Audio Cable to ok.ru..."
           RTMP_URL="rtmp://vsu.okcdn.ru/input/14601603391083_14040893622891_puxzrwjniu"
           
-          # Yahan FFmpeg "VirtualSpeaker.monitor" se seedha HQ audio uthayega
+          # FFmpeg ab direct screen aur virtual speaker se data le kar ok.ru bhejega
           ffmpeg -y \
             -f x11grab -video_size 1280x720 -framerate 30 -draw_mouse 0 -i :99 \
             -f pulse -i VirtualSpeaker.monitor \
