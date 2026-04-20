@@ -1,19 +1,13 @@
 const { Worker, isMainThread, parentPort } = require('worker_threads');
 const fs = require('fs');
 
-// =====================================================================
-// WORKER 1: MAIN THREAD (PUPPETEER & DATA EXTRACTION)
-// =====================================================================
 if (isMainThread) {
     const puppeteer = require('puppeteer-extra');
     const StealthPlugin = require('puppeteer-extra-plugin-stealth');
     puppeteer.use(StealthPlugin());
 
-    if (fs.existsSync('debug_source.webm')) {
-        console.log("[INFO] Old 'debug_source.webm' found. Deleting it...");
-        fs.unlinkSync('debug_source.webm');
-        console.log("[SUCCESS] Old file deleted.");
-    }
+    if (fs.existsSync('debug_source.webm')) fs.unlinkSync('debug_source.webm');
+    if (fs.existsSync('debug_screenshot.png')) fs.unlinkSync('debug_screenshot.png');
 
     (async () => {
         console.log("\n=======================================================");
@@ -26,7 +20,6 @@ if (isMainThread) {
         const proxyUser = 'jznxuitn';
         const proxyPass = '4sp9smus5w8q';
         
-        // Workflow se aane wala URL ya default URL
         const targetUrl = process.env.STREAM_URL || 'https://dlstreams.com/';
 
         let browser;
@@ -55,91 +48,61 @@ if (isMainThread) {
         const page = await browser.newPage();
         
         try {
-            console.log("[STEP 2] Applying Proxy Credentials...");
             await page.authenticate({ username: proxyUser, password: proxyPass });
-            console.log("[SUCCESS] Proxy credentials applied.");
-        } catch(err) {
-            console.log(`[ERROR] Proxy authentication failed: ${err.message}`);
-        }
+        } catch(err) {}
 
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
-        
-        // Anti-popup injection
         await page.evaluateOnNewDocument(() => { window.open = () => null; });
-        console.log("[INFO] Anti-Popup logic injected.");
 
-        // =========================================================
-        // DATA RADAR
-        // =========================================================
         let chunkCount = 0;
         await page.exposeFunction('sendToWorker2', (base64Chunk) => {
             chunkCount++;
             const buffer = Buffer.from(base64Chunk, 'base64');
-            
             console.log(`[DATA RADAR] Chunk #${chunkCount} captured. Size: ${buffer.length} bytes`);
-            
             fs.appendFileSync('debug_source.webm', buffer);
             ffmpegWorker.postMessage({ type: 'VIDEO_CHUNK', data: base64Chunk });
         });
 
         try {
-            console.log(`\n[STEP 3] Navigating directly to Target URL: ${targetUrl}`);
+            console.log(`\n[STEP 2] Navigating directly to Target URL: ${targetUrl}`);
             await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-            console.log("[SUCCESS] Page loaded completely.");
             
-            /* =========================================
-               COMMENTED OUT: Old Click Logic
-            =========================================
-            const cricketSelector = 'a[href="/index.php?cat=Cricket"]';
-            ...
-            const willowBtn = await page.$(willowSelector);
-            ...
-            const streamPage = await newPagePromise;
-            ========================================= */
-
-            // Kyunke ab hum direct stream url par hain, naya tab (streamPage) ki zaroorat nahi.
-            // Hum direct 'page' variable use karenge.
-
-            console.log("\n[STEP 4] Waiting 15 seconds for stream and players to load...");
+            console.log("\n[STEP 3] Waiting 15 seconds for stream and players to load...");
             await new Promise(r => setTimeout(r, 15000));
-            console.log("[SUCCESS] Wait complete.");
 
-            console.log("[STEP 5] Checking and Destroying Ad-Traps (div#dontfoid)...");
+            console.log("[STEP 4] Checking and Destroying Ad-Traps (div#dontfoid)...");
             try {
                 await page.evaluate(() => {
                     const trap = document.querySelector('div#dontfoid');
-                    if (trap) {
-                        trap.remove();
-                        console.log("[SUCCESS-IN-PAGE] Ad-trap removed.");
-                    }
+                    if (trap) trap.remove();
                     window.scrollBy({ top: 400, behavior: 'smooth' });
                 });
-                console.log("[SUCCESS] Page scrolled down slightly.");
-            } catch (err) {
-                console.log(`[WARNING] Ad-trap removal skipped/failed: ${err.message}`);
-            }
+            } catch (err) {}
 
-            console.log("\n[STEP 6] Waiting 3 seconds before unmuting...");
+            console.log("\n[STEP 5] Waiting 3 seconds before unmuting...");
             await new Promise(r => setTimeout(r, 3000));
 
-            console.log("[STEP 7] Attempting to Unmute Player safely...");
-            let unmuteFound = false;
             for (const frame of page.frames()) {
                 try {
                     await frame.evaluate(() => {
                         const unmuteBtn = document.querySelector('#UnMutePlayer button');
-                        if (unmuteBtn) {
-                            unmuteBtn.click();
-                            return true;
-                        }
-                        return false;
-                    }).then(res => { if(res) unmuteFound = true; });
+                        if (unmuteBtn) unmuteBtn.click();
+                    });
                 } catch (error) {}
             }
-            if(unmuteFound) console.log("[SUCCESS] Unmute button clicked.");
-            else console.log("[INFO] Unmute button not found. Moving on.");
 
-            console.log("\n[STEP 8] Hooking Native MediaRecorder to Video Player...");
+            // ==========================================
+            // NAYA STEP: SCREENSHOT & BRUTE FORCE PLAY
+            // ==========================================
+            console.log("\n[STEP 6] Taking Full-Page Debug Screenshot...");
+            try {
+                await page.screenshot({ path: 'debug_screenshot.png', fullPage: true });
+                console.log("[SUCCESS] Screenshot saved as 'debug_screenshot.png'.");
+            } catch (err) {
+                console.log(`[ERROR] Screenshot failed: ${err.message}`);
+            }
+
+            console.log("\n[STEP 7] Hooking Native MediaRecorder to Video Player...");
             let playerFound = false;
             
             for (let attempt = 1; attempt <= 3; attempt++) {
@@ -149,10 +112,13 @@ if (isMainThread) {
                 for (const frame of page.frames()) {
                     if (playerFound) break;
                     try {
-                        const hooked = await frame.evaluate(() => {
+                        const hooked = await frame.evaluate(async () => {
                             const video = document.querySelector('video');
                             if (video) {
                                 try {
+                                    // ZABARDASTI PLAY KARNE KI KOSHISH
+                                    video.play().catch(e => console.log("Play blocked by browser:", e));
+                                    
                                     const stream = video.captureStream();
                                     const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8,opus' });
                                     
@@ -162,13 +128,11 @@ if (isMainThread) {
                                             reader.readAsDataURL(e.data);
                                             reader.onloadend = () => {
                                                 const base64 = reader.result.split(',')[1];
-                                                window.sendToWorker2(base64); // Data bhej raha hai
+                                                window.sendToWorker2(base64);
                                             }
-                                        } else {
-                                            console.log("ALERT: Captured chunk is 0 bytes!");
                                         }
                                     };
-                                    recorder.start(2000); // 2 second chunks
+                                    recorder.start(2000);
                                     return true;
                                 } catch (err) {
                                     return false;
@@ -178,44 +142,34 @@ if (isMainThread) {
                         });
                         
                         if (hooked) {
-                            console.log("[SUCCESS] MediaRecorder hooked successfully! Broadcaster is getting data.");
+                            console.log("[SUCCESS] MediaRecorder hooked successfully!");
                             playerFound = true;
                         }
                     } catch (e) {}
                 }
                 
-                if(!playerFound) {
-                    console.log(`[WARNING] Video player not found in Attempt ${attempt}. Waiting 10s...`);
-                    await new Promise(r => setTimeout(r, 10000));
-                }
+                if(!playerFound) await new Promise(r => setTimeout(r, 10000));
             }
 
             if (!playerFound) {
-                console.log("\n[ERROR CRITICAL] Could not find any video element on this URL. Please check the URL.");
+                console.log("\n[ERROR CRITICAL] Could not find any video element on this URL.");
             } else {
-                console.log("\n[STEP 9] Diagnostic Test running for 2 minutes. Watch DATA RADAR logs above...");
+                console.log("\n[STEP 8] Diagnostic Test running for 2 minutes...");
                 await new Promise(r => setTimeout(r, 120000)); 
-                console.log("\n⏰ [COMPLETED] 2 Minutes Test Over. Saving debug file.");
+                console.log("\n⏰ [COMPLETED] 2 Minutes Test Over.");
             }
 
         } catch (error) {
             console.log("\n[ERROR FATAL] Execution stopped or error occurred:", error.message);
         }
 
-        console.log("\n[STEP 10] Closing browser and stopping stream...");
+        console.log("\n[STEP 9] Closing browser and stopping stream...");
         ffmpegWorker.postMessage({ type: 'STOP' });
         await browser.close();
-        console.log("[SUCCESS] Worker 1 Shutdown complete.");
     })();
 } 
-// =====================================================================
-// WORKER 2: BACKGROUND THREAD (FFMPEG & OK.RU BROADCAST)
-// =====================================================================
 else {
     const { spawn } = require('child_process');
-
-    console.log("[Worker 2] FFmpeg Broadcaster Online! Connecting to OK.ru...");
-
     const rtmpUrl = 'rtmp://vsu.okcdn.ru/input/14601603391083_14040893622891_puxzrwjniu';
 
     const ffmpeg = spawn('ffmpeg', [
@@ -234,15 +188,12 @@ else {
             const buffer = Buffer.from(msg.data, 'base64');
             ffmpeg.stdin.write(buffer); 
         } else if (msg.type === 'STOP') {
-            console.log("[Worker 2] STOP signal received. Shutting down FFmpeg...");
             ffmpeg.stdin.end();
             process.exit(0);
         }
     });
 
-    ffmpeg.stderr.on('data', (data) => {
-        // Mute for now to focus on Data Radar in Main Thread
-    });
+    ffmpeg.stderr.on('data', () => {});
 }
 
 
