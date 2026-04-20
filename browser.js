@@ -1,5 +1,5 @@
 const { Worker, isMainThread, parentPort } = require('worker_threads');
-const fs = require('fs'); // DIAGNOSTIC: File system for checking source data
+const fs = require('fs');
 
 // =====================================================================
 // WORKER 1: MAIN THREAD (PUPPETEER & DATA EXTRACTION)
@@ -9,174 +9,203 @@ if (isMainThread) {
     const StealthPlugin = require('puppeteer-extra-plugin-stealth');
     puppeteer.use(StealthPlugin());
 
-    // DIAGNOSTIC: Pehle se agar koi purani test file hai toh usay delete kar do
-    if (fs.existsSync('debug_source.webm')) fs.unlinkSync('debug_source.webm');
+    if (fs.existsSync('debug_source.webm')) {
+        console.log("[INFO] Old 'debug_source.webm' found. Deleting it...");
+        fs.unlinkSync('debug_source.webm');
+        console.log("[SUCCESS] Old file deleted.");
+    }
 
     (async () => {
+        console.log("\n=======================================================");
         console.log("[Worker 1] Launching Browser in DIAGNOSTIC MODE...");
+        console.log("=======================================================\n");
 
         const ffmpegWorker = new Worker(__filename);
 
         const proxyIpPort = '31.59.20.176:6754';
         const proxyUser = 'jznxuitn';
         const proxyPass = '4sp9smus5w8q';
+        
+        // Workflow se aane wala URL ya default URL
+        const targetUrl = process.env.STREAM_URL || 'https://dlstreams.com/';
 
-        const browser = await puppeteer.launch({
-            headless: false,
-            defaultViewport: { width: 1280, height: 720 },
-            args: [
-                '--no-sandbox', 
-                '--disable-setuid-sandbox',
-                '--disable-web-security',
-                '--disable-features=IsolateOrigins,site-per-process',
-                '--enable-experimental-web-platform-features',
-                '--window-size=1280,720',
-                '--autoplay-policy=no-user-gesture-required',
-                `--proxy-server=http://${proxyIpPort}`
-            ]
-        });
+        let browser;
+        try {
+            console.log("[STEP 1] Starting Puppeteer Browser...");
+            browser = await puppeteer.launch({
+                headless: false,
+                defaultViewport: { width: 1280, height: 720 },
+                args: [
+                    '--no-sandbox', 
+                    '--disable-setuid-sandbox',
+                    '--disable-web-security',
+                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--enable-experimental-web-platform-features',
+                    '--window-size=1280,720',
+                    '--autoplay-policy=no-user-gesture-required',
+                    `--proxy-server=http://${proxyIpPort}`
+                ]
+            });
+            console.log("[SUCCESS] Browser launched successfully.");
+        } catch (err) {
+            console.log(`[ERROR] Browser launch failed: ${err.message}`);
+            return;
+        }
 
         const page = await browser.newPage();
-        await page.authenticate({ username: proxyUser, password: proxyPass });
-        console.log("Proxy credentials applied.");
+        
+        try {
+            console.log("[STEP 2] Applying Proxy Credentials...");
+            await page.authenticate({ username: proxyUser, password: proxyPass });
+            console.log("[SUCCESS] Proxy credentials applied.");
+        } catch(err) {
+            console.log(`[ERROR] Proxy authentication failed: ${err.message}`);
+        }
 
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
+        
+        // Anti-popup injection
+        await page.evaluateOnNewDocument(() => { window.open = () => null; });
+        console.log("[INFO] Anti-Popup logic injected.");
 
         // =========================================================
-        // DATA RADAR: Yahan check hoga ke data aa raha hai ya nahi
+        // DATA RADAR
         // =========================================================
         let chunkCount = 0;
         await page.exposeFunction('sendToWorker2', (base64Chunk) => {
             chunkCount++;
             const buffer = Buffer.from(base64Chunk, 'base64');
             
-            // Terminal mein print karega
             console.log(`[DATA RADAR] Chunk #${chunkCount} captured. Size: ${buffer.length} bytes`);
             
-            // Local hard drive mein save karega (Source check karne ke liye)
             fs.appendFileSync('debug_source.webm', buffer);
-            
             ffmpegWorker.postMessage({ type: 'VIDEO_CHUNK', data: base64Chunk });
         });
 
         try {
-            console.log("Navigating to Homepage...");
-            await page.goto('https://dlstreams.com/', { waitUntil: 'networkidle2', timeout: 60000 });
-            await new Promise(r => setTimeout(r, 4000));
-
+            console.log(`\n[STEP 3] Navigating directly to Target URL: ${targetUrl}`);
+            await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+            console.log("[SUCCESS] Page loaded completely.");
+            
+            /* =========================================
+               COMMENTED OUT: Old Click Logic
+            =========================================
             const cricketSelector = 'a[href="/index.php?cat=Cricket"]';
-            await page.waitForSelector(cricketSelector, { visible: true, timeout: 10000 });
-            const cricketBtn = await page.$(cricketSelector);
-            if (cricketBtn) {
-                const box = await cricketBtn.boundingBox();
-                await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
-                await new Promise(r => setTimeout(r, 1000)); 
-                await Promise.all([
-                    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }), 
-                    page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
-                ]);
+            ...
+            const willowBtn = await page.$(willowSelector);
+            ...
+            const streamPage = await newPagePromise;
+            ========================================= */
+
+            // Kyunke ab hum direct stream url par hain, naya tab (streamPage) ki zaroorat nahi.
+            // Hum direct 'page' variable use karenge.
+
+            console.log("\n[STEP 4] Waiting 15 seconds for stream and players to load...");
+            await new Promise(r => setTimeout(r, 15000));
+            console.log("[SUCCESS] Wait complete.");
+
+            console.log("[STEP 5] Checking and Destroying Ad-Traps (div#dontfoid)...");
+            try {
+                await page.evaluate(() => {
+                    const trap = document.querySelector('div#dontfoid');
+                    if (trap) {
+                        trap.remove();
+                        console.log("[SUCCESS-IN-PAGE] Ad-trap removed.");
+                    }
+                    window.scrollBy({ top: 400, behavior: 'smooth' });
+                });
+                console.log("[SUCCESS] Page scrolled down slightly.");
+            } catch (err) {
+                console.log(`[WARNING] Ad-trap removal skipped/failed: ${err.message}`);
             }
 
-            console.log("Scrolling and clicking IPL match...");
-            await page.waitForSelector('div.schedule__event', { visible: true, timeout: 15000 });
-            await page.mouse.wheel({ deltaY: 600 });
-            await new Promise(r => setTimeout(r, 2000));
+            console.log("\n[STEP 6] Waiting 3 seconds before unmuting...");
+            await new Promise(r => setTimeout(r, 3000));
 
-            const targetMatch = await page.evaluateHandle(() => {
-                const events = Array.from(document.querySelectorAll('div.schedule__event'));
-                return events.find(el => el.textContent.includes('Indian Premier League'));
-            });
+            console.log("[STEP 7] Attempting to Unmute Player safely...");
+            let unmuteFound = false;
+            for (const frame of page.frames()) {
+                try {
+                    await frame.evaluate(() => {
+                        const unmuteBtn = document.querySelector('#UnMutePlayer button');
+                        if (unmuteBtn) {
+                            unmuteBtn.click();
+                            return true;
+                        }
+                        return false;
+                    }).then(res => { if(res) unmuteFound = true; });
+                } catch (error) {}
+            }
+            if(unmuteFound) console.log("[SUCCESS] Unmute button clicked.");
+            else console.log("[INFO] Unmute button not found. Moving on.");
 
-            const box = await targetMatch.boundingBox();
-            if (box) {
-                await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
-                await new Promise(r => setTimeout(r, 1000)); 
-                await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+            console.log("\n[STEP 8] Hooking Native MediaRecorder to Video Player...");
+            let playerFound = false;
+            
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                if (playerFound) break;
+                console.log(`[INFO] Searching for <video> tag (Attempt ${attempt}/3)...`);
                 
-                console.log("Clicking 'Willow 2 Cricket'...");
-                const willowSelector = 'a[data-ch="willow 2 cricket"]'; 
-                await page.waitForSelector(willowSelector, { visible: true, timeout: 10000 });
-                const willowBtn = await page.$(willowSelector);
-                
-                if (willowBtn) {
-                    const wBox = await willowBtn.boundingBox();
-                    await page.mouse.move(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2, { steps: 15 });
-                    await new Promise(r => setTimeout(r, 1000)); 
-
-                    const newPagePromise = new Promise(x => browser.once('targetcreated', target => x(target.page())));
-                    await page.mouse.click(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2);
-                    
-                    const streamPage = await newPagePromise;
-                    if (streamPage) {
-                        console.log("Shifted to Stream Tab! Injecting Anti-Popup...");
-                        await streamPage.bringToFront();
-                        
-                        await streamPage.evaluateOnNewDocument(() => { window.open = () => null; });
-                        await new Promise(r => setTimeout(r, 12000)); 
-                        
-                        console.log("Destroying Ad-Trap and unmuting...");
-                        await streamPage.evaluate(() => {
-                            const trap = document.querySelector('div#dontfoid');
-                            if (trap) trap.remove();
+                for (const frame of page.frames()) {
+                    if (playerFound) break;
+                    try {
+                        const hooked = await frame.evaluate(() => {
+                            const video = document.querySelector('video');
+                            if (video) {
+                                try {
+                                    const stream = video.captureStream();
+                                    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8,opus' });
+                                    
+                                    recorder.ondataavailable = async (e) => {
+                                        if (e.data.size > 0) {
+                                            const reader = new FileReader();
+                                            reader.readAsDataURL(e.data);
+                                            reader.onloadend = () => {
+                                                const base64 = reader.result.split(',')[1];
+                                                window.sendToWorker2(base64); // Data bhej raha hai
+                                            }
+                                        } else {
+                                            console.log("ALERT: Captured chunk is 0 bytes!");
+                                        }
+                                    };
+                                    recorder.start(2000); // 2 second chunks
+                                    return true;
+                                } catch (err) {
+                                    return false;
+                                }
+                            }
+                            return false;
                         });
                         
-                        await new Promise(r => setTimeout(r, 3000));
-                        
-                        for (const frame of streamPage.frames()) {
-                            try {
-                                await frame.evaluate(() => {
-                                    const unmuteBtn = document.querySelector('#UnMutePlayer button');
-                                    if (unmuteBtn) unmuteBtn.click();
-                                });
-                            } catch (error) {}
+                        if (hooked) {
+                            console.log("[SUCCESS] MediaRecorder hooked successfully! Broadcaster is getting data.");
+                            playerFound = true;
                         }
-                        
-                        console.log("[Worker 1] Hooking Native MediaRecorder to Player...");
-                        
-                        for (const frame of streamPage.frames()) {
-                            try {
-                                await frame.evaluate(() => {
-                                    const video = document.querySelector('video');
-                                    if (video) {
-                                        const stream = video.captureStream();
-                                        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8,opus' });
-                                        
-                                        recorder.ondataavailable = async (e) => {
-                                            if (e.data.size > 0) {
-                                                const reader = new FileReader();
-                                                reader.readAsDataURL(e.data);
-                                                reader.onloadend = () => {
-                                                    const base64 = reader.result.split(',')[1];
-                                                    window.sendToWorker2(base64);
-                                                }
-                                            } else {
-                                                console.log("ALERT: Captured chunk is 0 bytes!");
-                                            }
-                                        };
-                                        recorder.start(2000); // 2 second chunks
-                                    }
-                                });
-                            } catch (e) {}
-                        }
-
-                        // Hum is diagnostic test ko sirf 2 minute chalayenge, taake hum fauran file download kar ke dekh sakein.
-                        console.log("Test running for 2 minutes. Keep an eye on the DATA RADAR logs...");
-                        await new Promise(r => setTimeout(r, 120000)); 
-                        
-                        console.log("⏰ 2 Minutes Test Over. Saving debug file.");
-                    }
+                    } catch (e) {}
                 }
+                
+                if(!playerFound) {
+                    console.log(`[WARNING] Video player not found in Attempt ${attempt}. Waiting 10s...`);
+                    await new Promise(r => setTimeout(r, 10000));
+                }
+            }
+
+            if (!playerFound) {
+                console.log("\n[ERROR CRITICAL] Could not find any video element on this URL. Please check the URL.");
             } else {
-                console.log("IPL Match nahi mila.");
+                console.log("\n[STEP 9] Diagnostic Test running for 2 minutes. Watch DATA RADAR logs above...");
+                await new Promise(r => setTimeout(r, 120000)); 
+                console.log("\n⏰ [COMPLETED] 2 Minutes Test Over. Saving debug file.");
             }
 
         } catch (error) {
-            console.log("Execution stopped or error occurred:", error.message);
+            console.log("\n[ERROR FATAL] Execution stopped or error occurred:", error.message);
         }
 
-        console.log("Closing browser and stopping stream...");
+        console.log("\n[STEP 10] Closing browser and stopping stream...");
         ffmpegWorker.postMessage({ type: 'STOP' });
         await browser.close();
+        console.log("[SUCCESS] Worker 1 Shutdown complete.");
     })();
 } 
 // =====================================================================
@@ -185,7 +214,7 @@ if (isMainThread) {
 else {
     const { spawn } = require('child_process');
 
-    console.log("[Worker 2] FFmpeg Broadcaster Online!");
+    console.log("[Worker 2] FFmpeg Broadcaster Online! Connecting to OK.ru...");
 
     const rtmpUrl = 'rtmp://vsu.okcdn.ru/input/14601603391083_14040893622891_puxzrwjniu';
 
@@ -205,15 +234,253 @@ else {
             const buffer = Buffer.from(msg.data, 'base64');
             ffmpeg.stdin.write(buffer); 
         } else if (msg.type === 'STOP') {
+            console.log("[Worker 2] STOP signal received. Shutting down FFmpeg...");
             ffmpeg.stdin.end();
             process.exit(0);
         }
     });
 
     ffmpeg.stderr.on('data', (data) => {
-        // Mute for now to focus on Data Radar
+        // Mute for now to focus on Data Radar in Main Thread
     });
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ====== daddyLiveHD not work belwo code  ================================================
+
+
+
+// const { Worker, isMainThread, parentPort } = require('worker_threads');
+// const fs = require('fs'); // DIAGNOSTIC: File system for checking source data
+
+// // =====================================================================
+// // WORKER 1: MAIN THREAD (PUPPETEER & DATA EXTRACTION)
+// // =====================================================================
+// if (isMainThread) {
+//     const puppeteer = require('puppeteer-extra');
+//     const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+//     puppeteer.use(StealthPlugin());
+
+//     // DIAGNOSTIC: Pehle se agar koi purani test file hai toh usay delete kar do
+//     if (fs.existsSync('debug_source.webm')) fs.unlinkSync('debug_source.webm');
+
+//     (async () => {
+//         console.log("[Worker 1] Launching Browser in DIAGNOSTIC MODE...");
+
+//         const ffmpegWorker = new Worker(__filename);
+
+//         const proxyIpPort = '31.59.20.176:6754';
+//         const proxyUser = 'jznxuitn';
+//         const proxyPass = '4sp9smus5w8q';
+
+//         const browser = await puppeteer.launch({
+//             headless: false,
+//             defaultViewport: { width: 1280, height: 720 },
+//             args: [
+//                 '--no-sandbox', 
+//                 '--disable-setuid-sandbox',
+//                 '--disable-web-security',
+//                 '--disable-features=IsolateOrigins,site-per-process',
+//                 '--enable-experimental-web-platform-features',
+//                 '--window-size=1280,720',
+//                 '--autoplay-policy=no-user-gesture-required',
+//                 `--proxy-server=http://${proxyIpPort}`
+//             ]
+//         });
+
+//         const page = await browser.newPage();
+//         await page.authenticate({ username: proxyUser, password: proxyPass });
+//         console.log("Proxy credentials applied.");
+
+//         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
+
+//         // =========================================================
+//         // DATA RADAR: Yahan check hoga ke data aa raha hai ya nahi
+//         // =========================================================
+//         let chunkCount = 0;
+//         await page.exposeFunction('sendToWorker2', (base64Chunk) => {
+//             chunkCount++;
+//             const buffer = Buffer.from(base64Chunk, 'base64');
+            
+//             // Terminal mein print karega
+//             console.log(`[DATA RADAR] Chunk #${chunkCount} captured. Size: ${buffer.length} bytes`);
+            
+//             // Local hard drive mein save karega (Source check karne ke liye)
+//             fs.appendFileSync('debug_source.webm', buffer);
+            
+//             ffmpegWorker.postMessage({ type: 'VIDEO_CHUNK', data: base64Chunk });
+//         });
+
+//         try {
+//             console.log("Navigating to Homepage...");
+//             await page.goto('https://dlstreams.com/', { waitUntil: 'networkidle2', timeout: 60000 });
+//             await new Promise(r => setTimeout(r, 4000));
+
+//             const cricketSelector = 'a[href="/index.php?cat=Cricket"]';
+//             await page.waitForSelector(cricketSelector, { visible: true, timeout: 10000 });
+//             const cricketBtn = await page.$(cricketSelector);
+//             if (cricketBtn) {
+//                 const box = await cricketBtn.boundingBox();
+//                 await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
+//                 await new Promise(r => setTimeout(r, 1000)); 
+//                 await Promise.all([
+//                     page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }), 
+//                     page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+//                 ]);
+//             }
+
+//             console.log("Scrolling and clicking IPL match...");
+//             await page.waitForSelector('div.schedule__event', { visible: true, timeout: 15000 });
+//             await page.mouse.wheel({ deltaY: 600 });
+//             await new Promise(r => setTimeout(r, 2000));
+
+//             const targetMatch = await page.evaluateHandle(() => {
+//                 const events = Array.from(document.querySelectorAll('div.schedule__event'));
+//                 return events.find(el => el.textContent.includes('Indian Premier League'));
+//             });
+
+//             const box = await targetMatch.boundingBox();
+//             if (box) {
+//                 await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
+//                 await new Promise(r => setTimeout(r, 1000)); 
+//                 await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+                
+//                 console.log("Clicking 'Willow 2 Cricket'...");
+//                 const willowSelector = 'a[data-ch="willow 2 cricket"]'; 
+//                 await page.waitForSelector(willowSelector, { visible: true, timeout: 10000 });
+//                 const willowBtn = await page.$(willowSelector);
+                
+//                 if (willowBtn) {
+//                     const wBox = await willowBtn.boundingBox();
+//                     await page.mouse.move(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2, { steps: 15 });
+//                     await new Promise(r => setTimeout(r, 1000)); 
+
+//                     const newPagePromise = new Promise(x => browser.once('targetcreated', target => x(target.page())));
+//                     await page.mouse.click(wBox.x + wBox.width / 2, wBox.y + wBox.height / 2);
+                    
+//                     const streamPage = await newPagePromise;
+//                     if (streamPage) {
+//                         console.log("Shifted to Stream Tab! Injecting Anti-Popup...");
+//                         await streamPage.bringToFront();
+                        
+//                         await streamPage.evaluateOnNewDocument(() => { window.open = () => null; });
+//                         await new Promise(r => setTimeout(r, 12000)); 
+                        
+//                         console.log("Destroying Ad-Trap and unmuting...");
+//                         await streamPage.evaluate(() => {
+//                             const trap = document.querySelector('div#dontfoid');
+//                             if (trap) trap.remove();
+//                         });
+                        
+//                         await new Promise(r => setTimeout(r, 3000));
+                        
+//                         for (const frame of streamPage.frames()) {
+//                             try {
+//                                 await frame.evaluate(() => {
+//                                     const unmuteBtn = document.querySelector('#UnMutePlayer button');
+//                                     if (unmuteBtn) unmuteBtn.click();
+//                                 });
+//                             } catch (error) {}
+//                         }
+                        
+//                         console.log("[Worker 1] Hooking Native MediaRecorder to Player...");
+                        
+//                         for (const frame of streamPage.frames()) {
+//                             try {
+//                                 await frame.evaluate(() => {
+//                                     const video = document.querySelector('video');
+//                                     if (video) {
+//                                         const stream = video.captureStream();
+//                                         const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8,opus' });
+                                        
+//                                         recorder.ondataavailable = async (e) => {
+//                                             if (e.data.size > 0) {
+//                                                 const reader = new FileReader();
+//                                                 reader.readAsDataURL(e.data);
+//                                                 reader.onloadend = () => {
+//                                                     const base64 = reader.result.split(',')[1];
+//                                                     window.sendToWorker2(base64);
+//                                                 }
+//                                             } else {
+//                                                 console.log("ALERT: Captured chunk is 0 bytes!");
+//                                             }
+//                                         };
+//                                         recorder.start(2000); // 2 second chunks
+//                                     }
+//                                 });
+//                             } catch (e) {}
+//                         }
+
+//                         // Hum is diagnostic test ko sirf 2 minute chalayenge, taake hum fauran file download kar ke dekh sakein.
+//                         console.log("Test running for 2 minutes. Keep an eye on the DATA RADAR logs...");
+//                         await new Promise(r => setTimeout(r, 120000)); 
+                        
+//                         console.log("⏰ 2 Minutes Test Over. Saving debug file.");
+//                     }
+//                 }
+//             } else {
+//                 console.log("IPL Match nahi mila.");
+//             }
+
+//         } catch (error) {
+//             console.log("Execution stopped or error occurred:", error.message);
+//         }
+
+//         console.log("Closing browser and stopping stream...");
+//         ffmpegWorker.postMessage({ type: 'STOP' });
+//         await browser.close();
+//     })();
+// } 
+// // =====================================================================
+// // WORKER 2: BACKGROUND THREAD (FFMPEG & OK.RU BROADCAST)
+// // =====================================================================
+// else {
+//     const { spawn } = require('child_process');
+
+//     console.log("[Worker 2] FFmpeg Broadcaster Online!");
+
+//     const rtmpUrl = 'rtmp://vsu.okcdn.ru/input/14601603391083_14040893622891_puxzrwjniu';
+
+//     const ffmpeg = spawn('ffmpeg', [
+//         '-i', 'pipe:0', 
+//         '-c:v', 'libx264', 
+//         '-preset', 'veryfast', 
+//         '-crf', '28', 
+//         '-c:a', 'aac', 
+//         '-b:a', '128k', 
+//         '-f', 'flv', 
+//         rtmpUrl 
+//     ]);
+
+//     parentPort.on('message', (msg) => {
+//         if (msg.type === 'VIDEO_CHUNK') {
+//             const buffer = Buffer.from(msg.data, 'base64');
+//             ffmpeg.stdin.write(buffer); 
+//         } else if (msg.type === 'STOP') {
+//             ffmpeg.stdin.end();
+//             process.exit(0);
+//         }
+//     });
+
+//     ffmpeg.stderr.on('data', (data) => {
+//         // Mute for now to focus on Data Radar
+//     });
+// }
 
 
 
