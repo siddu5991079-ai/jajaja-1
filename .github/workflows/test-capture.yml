@@ -11,6 +11,10 @@ on:
 jobs:
   bypass-and-broadcast:
     runs-on: ubuntu-latest
+    
+    # NAYA STEP: GitHub Releases create karne ke liye permission zaroori hai
+    permissions:
+      contents: write 
 
     steps:
       - name: Checkout Code
@@ -23,38 +27,53 @@ jobs:
 
       - name: Install System Dependencies
         run: |
-          echo "[INFO] Installing server dependencies..."
           sudo apt-get update
           sudo apt-get install -y xvfb ffmpeg libgbm-dev
-          echo "[SUCCESS] Dependencies installed."
 
       - name: Install Puppeteer & Stealth
         run: |
-          echo "[INFO] Installing Node packages..."
           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
-          echo "[SUCCESS] Node packages installed."
 
       - name: Start Diagnostic Broadcast
-        # Yahan hum input mein diya gaya URL environment variable ke zariye bhej rahe hain
         env:
           STREAM_URL: ${{ github.event.inputs.stream_url }}
         run: |
-          echo "[INFO] Starting virtual display..."
           Xvfb :99 -screen 0 1280x720x24 &
           export DISPLAY=:99
           sleep 3
-          
-          echo "[INFO] Target URL is: $STREAM_URL"
-          echo "[INFO] Starting Node.js Broadcaster..."
-          
           node browser.js
 
-      - name: Upload Diagnostic Source Video
+      - name: Upload Logs to GitHub Releases
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "[INFO] Preparing to create GitHub Release for easy viewing..."
+          
+          # Har naye run ke liye ek unique Release tag banayega
+          TAG_NAME="debug-run-${GITHUB_RUN_ID}"
+          
+          FILES_TO_UPLOAD=""
+          if [ -f debug_screenshot.png ]; then FILES_TO_UPLOAD="debug_screenshot.png"; fi
+          if [ -f debug_source.webm ]; then FILES_TO_UPLOAD="$FILES_TO_UPLOAD debug_source.webm"; fi
+          
+          if [ -n "$FILES_TO_UPLOAD" ]; then
+            gh release create "$TAG_NAME" $FILES_TO_UPLOAD \
+              --title "Debug Visuals: $TAG_NAME" \
+              --notes "Yahan aapka screenshot aur raw video file hai. Check karein ke screen par kya chal raha tha."
+            echo "[SUCCESS] Release created! Go to your repository's 'Releases' tab to view the screenshot."
+          else
+            echo "[WARNING] No screenshot or video found to upload."
+          fi
+
+      - name: Upload Diagnostic Artifact (Backup)
         if: always() 
         uses: actions/upload-artifact@v4
         with:
           name: Source-Debug-Video
-          path: debug_source.webm
+          path: |
+            debug_source.webm
+            debug_screenshot.png
           retention-days: 1
 
 
