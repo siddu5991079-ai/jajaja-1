@@ -25,38 +25,35 @@ jobs:
         run: |
           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
 
-      - name: Setup Virtual Audio & Display
+      # NAYA UPDATE: Sab kuch ek hi Step mein combine kar diya hai
+      - name: Launch 2026 Virtual Pipeline & Broadcast
+        env:
+          DISPLAY: :99 # GitHub ko strictly bata diya ke Screen :99 par hai
         run: |
-          # 1. Start Virtual Display for 720p Video
+          # 1. Start Virtual Display (Screen)
           Xvfb :99 -screen 0 1280x720x24 &
-          export DISPLAY=:99
-          sleep 2
+          sleep 3
 
-          # 2. Start Virtual Digital Speaker (PulseAudio Magic)
+          # 2. Start Virtual Audio (Speaker)
           pulseaudio -k 2>/dev/null || true
           pulseaudio -D --exit-idle-time=-1
           sleep 2
-          
-          # Virtual speaker create aur default set karna
           pactl load-module module-null-sink sink_name=VirtualSpeaker
           pactl set-default-sink VirtualSpeaker
           pactl set-default-source VirtualSpeaker.monitor
 
-      - name: Start Broadcast Pipeline
-        run: |
           # 3. Start Browser Automation in Background
           echo "Starting browser automation..."
           node browser.js &
           
-          # 4. Wait 60 seconds for browser to load, bypass ads, and unmute
-          echo "Waiting 60 seconds for video to play and unmute..."
+          # 4. Wait 60 seconds for video to play and unmute
+          echo "Waiting 60 seconds for video to load..."
           sleep 60
           
-          # 5. Start Perfect Audio-Video Capture to ok.ru Live
+          # 5. Start Perfect Audio-Video Capture to ok.ru
           echo "Starting 720p HD Capture with Virtual Audio Cable to ok.ru..."
           RTMP_URL="rtmp://vsu.okcdn.ru/input/14601603391083_14040893622891_puxzrwjniu"
           
-          # FFmpeg ab direct screen aur virtual speaker se data le kar ok.ru bhejega
           ffmpeg -y \
             -f x11grab -video_size 1280x720 -framerate 30 -draw_mouse 0 -i :99 \
             -f pulse -i VirtualSpeaker.monitor \
