@@ -1,3 +1,4 @@
+
 const { Worker, isMainThread, parentPort } = require('worker_threads');
 const fs = require('fs');
 
@@ -6,6 +7,7 @@ if (isMainThread) {
     const StealthPlugin = require('puppeteer-extra-plugin-stealth');
     puppeteer.use(StealthPlugin());
 
+    // Purani files delete karo taake naya test saaf ho
     if (fs.existsSync('debug_source.webm')) fs.unlinkSync('debug_source.webm');
     if (fs.existsSync('debug_screenshot.png')) fs.unlinkSync('debug_screenshot.png');
 
@@ -24,7 +26,7 @@ if (isMainThread) {
 
         let browser;
         try {
-            console.log("[STEP 1] Starting Puppeteer Browser...");
+            console.log("[STEP 1] Starting Puppeteer Browser with Software Decoding...");
             browser = await puppeteer.launch({
                 headless: false,
                 defaultViewport: { width: 1280, height: 720 },
@@ -32,10 +34,12 @@ if (isMainThread) {
                     '--no-sandbox', 
                     '--disable-setuid-sandbox',
                     '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--disable-features=IsolateOrigins,site-per-process,HardwareMediaKeyProvider',
                     '--enable-experimental-web-platform-features',
                     '--window-size=1280,720',
                     '--autoplay-policy=no-user-gesture-required',
+                    '--disable-gpu', 
+                    '--disable-accelerated-video-decode', 
                     `--proxy-server=http://${proxyIpPort}`
                 ]
             });
@@ -54,6 +58,7 @@ if (isMainThread) {
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
         await page.evaluateOnNewDocument(() => { window.open = () => null; });
 
+        // Data Radar Setup
         let chunkCount = 0;
         await page.exposeFunction('sendToWorker2', (base64Chunk) => {
             chunkCount++;
@@ -79,47 +84,78 @@ if (isMainThread) {
                 });
             } catch (err) {}
 
-            console.log("\n[STEP 5] Waiting 3 seconds before unmuting...");
+            console.log("\n[STEP 5] Waiting 3 seconds before aggressive unmute...");
             await new Promise(r => setTimeout(r, 3000));
 
+            // ==========================================
+            // AGGRESSIVE UNMUTE & CLICK OVERLAY
+            // ==========================================
+            console.log("[INFO] Hunting for 'CLICK HERE TO UNMUTE' overlays in all frames...");
             for (const frame of page.frames()) {
                 try {
                     await frame.evaluate(() => {
-                        const unmuteBtn = document.querySelector('#UnMutePlayer button');
-                        if (unmuteBtn) unmuteBtn.click();
+                        // 1. Purana button method
+                        const oldBtn = document.querySelector('#UnMutePlayer button');
+                        if (oldBtn) oldBtn.click();
+
+                        // 2. Text based overlay hunter (Jo DevTools mein dikha)
+                        const elements = Array.from(document.querySelectorAll('div, span, a, button'));
+                        const overlay = elements.find(el => el.innerText && el.innerText.toUpperCase().includes('CLICK HERE TO UNMUTE'));
+                        if (overlay) {
+                            overlay.click();
+                            console.log("Overlay Clicked!");
+                        }
+
+                        // 3. Force Unmute via Code
+                        const video = document.querySelector('video');
+                        if (video) {
+                            video.muted = false;
+                            video.volume = 1.0;
+                            setTimeout(() => {
+                                video.play().catch(e => console.log("Force play blocked:", e));
+                            }, 500);
+                        }
                     });
                 } catch (error) {}
             }
+            
+            console.log("[INFO] Waiting 3 seconds for video to buffer after clicking play...");
+            await new Promise(r => setTimeout(r, 3000));
 
-            // ==========================================
-            // NAYA STEP: SCREENSHOT & BRUTE FORCE PLAY
-            // ==========================================
             console.log("\n[STEP 6] Taking Full-Page Debug Screenshot...");
             try {
                 await page.screenshot({ path: 'debug_screenshot.png', fullPage: true });
                 console.log("[SUCCESS] Screenshot saved as 'debug_screenshot.png'.");
-            } catch (err) {
-                console.log(`[ERROR] Screenshot failed: ${err.message}`);
-            }
+            } catch (err) {}
 
-            console.log("\n[STEP 7] Hooking Native MediaRecorder to Video Player...");
+            console.log("\n[STEP 7] Hooking Native MediaRecorder to Active Video Player...");
             let playerFound = false;
             
             for (let attempt = 1; attempt <= 3; attempt++) {
                 if (playerFound) break;
-                console.log(`[INFO] Searching for <video> tag (Attempt ${attempt}/3)...`);
+                console.log(`[INFO] Searching for Active <video> tag (Attempt ${attempt}/3)...`);
                 
                 for (const frame of page.frames()) {
                     if (playerFound) break;
                     try {
                         const hooked = await frame.evaluate(async () => {
-                            const video = document.querySelector('video');
-                            if (video) {
+                            // Sab video tags ko dhundo
+                            const videos = Array.from(document.querySelectorAll('video'));
+                            let activeVideo = null;
+                            
+                            for (let v of videos) {
+                                // Agar video visually bari hai (matlab chupi hui nahi hai)
+                                if (v.videoWidth > 0 || v.offsetWidth > 0) {
+                                    activeVideo = v;
+                                    break;
+                                }
+                            }
+
+                            if (activeVideo) {
                                 try {
-                                    // ZABARDASTI PLAY KARNE KI KOSHISH
-                                    video.play().catch(e => console.log("Play blocked by browser:", e));
+                                    activeVideo.play().catch(e => console.log("Play blocked:", e));
                                     
-                                    const stream = video.captureStream();
+                                    const stream = activeVideo.captureStream();
                                     const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8,opus' });
                                     
                                     recorder.ondataavailable = async (e) => {
@@ -142,7 +178,7 @@ if (isMainThread) {
                         });
                         
                         if (hooked) {
-                            console.log("[SUCCESS] MediaRecorder hooked successfully!");
+                            console.log("[SUCCESS] MediaRecorder hooked to REAL video successfully!");
                             playerFound = true;
                         }
                     } catch (e) {}
@@ -152,7 +188,7 @@ if (isMainThread) {
             }
 
             if (!playerFound) {
-                console.log("\n[ERROR CRITICAL] Could not find any video element on this URL.");
+                console.log("\n[ERROR CRITICAL] Could not find any active video element on this URL.");
             } else {
                 console.log("\n[STEP 8] Diagnostic Test running for 2 minutes...");
                 await new Promise(r => setTimeout(r, 120000)); 
@@ -169,6 +205,9 @@ if (isMainThread) {
     })();
 } 
 else {
+    // =====================================================================
+    // WORKER 2: BACKGROUND THREAD (FFMPEG & OK.RU BROADCAST)
+    // =====================================================================
     const { spawn } = require('child_process');
     const rtmpUrl = 'rtmp://vsu.okcdn.ru/input/14601603391083_14040893622891_puxzrwjniu';
 
@@ -195,6 +234,228 @@ else {
 
     ffmpeg.stderr.on('data', () => {});
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// =============== crichd website, screenshot mei tuu stream ON hai lekin video capture nahey hu rhaa hai =============================
+
+
+
+
+// const { Worker, isMainThread, parentPort } = require('worker_threads');
+// const fs = require('fs');
+
+// if (isMainThread) {
+//     const puppeteer = require('puppeteer-extra');
+//     const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+//     puppeteer.use(StealthPlugin());
+
+//     if (fs.existsSync('debug_source.webm')) fs.unlinkSync('debug_source.webm');
+//     if (fs.existsSync('debug_screenshot.png')) fs.unlinkSync('debug_screenshot.png');
+
+//     (async () => {
+//         console.log("\n=======================================================");
+//         console.log("[Worker 1] Launching Browser in DIAGNOSTIC MODE...");
+//         console.log("=======================================================\n");
+
+//         const ffmpegWorker = new Worker(__filename);
+
+//         const proxyIpPort = '31.59.20.176:6754';
+//         const proxyUser = 'jznxuitn';
+//         const proxyPass = '4sp9smus5w8q';
+        
+//         const targetUrl = process.env.STREAM_URL || 'https://dlstreams.com/';
+
+//         let browser;
+//         try {
+//             console.log("[STEP 1] Starting Puppeteer Browser...");
+//             browser = await puppeteer.launch({
+//                 headless: false,
+//                 defaultViewport: { width: 1280, height: 720 },
+//                 args: [
+//                     '--no-sandbox', 
+//                     '--disable-setuid-sandbox',
+//                     '--disable-web-security',
+//                     '--disable-features=IsolateOrigins,site-per-process',
+//                     '--enable-experimental-web-platform-features',
+//                     '--window-size=1280,720',
+//                     '--autoplay-policy=no-user-gesture-required',
+//                     `--proxy-server=http://${proxyIpPort}`
+//                 ]
+//             });
+//             console.log("[SUCCESS] Browser launched successfully.");
+//         } catch (err) {
+//             console.log(`[ERROR] Browser launch failed: ${err.message}`);
+//             return;
+//         }
+
+//         const page = await browser.newPage();
+        
+//         try {
+//             await page.authenticate({ username: proxyUser, password: proxyPass });
+//         } catch(err) {}
+
+//         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
+//         await page.evaluateOnNewDocument(() => { window.open = () => null; });
+
+//         let chunkCount = 0;
+//         await page.exposeFunction('sendToWorker2', (base64Chunk) => {
+//             chunkCount++;
+//             const buffer = Buffer.from(base64Chunk, 'base64');
+//             console.log(`[DATA RADAR] Chunk #${chunkCount} captured. Size: ${buffer.length} bytes`);
+//             fs.appendFileSync('debug_source.webm', buffer);
+//             ffmpegWorker.postMessage({ type: 'VIDEO_CHUNK', data: base64Chunk });
+//         });
+
+//         try {
+//             console.log(`\n[STEP 2] Navigating directly to Target URL: ${targetUrl}`);
+//             await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+            
+//             console.log("\n[STEP 3] Waiting 15 seconds for stream and players to load...");
+//             await new Promise(r => setTimeout(r, 15000));
+
+//             console.log("[STEP 4] Checking and Destroying Ad-Traps (div#dontfoid)...");
+//             try {
+//                 await page.evaluate(() => {
+//                     const trap = document.querySelector('div#dontfoid');
+//                     if (trap) trap.remove();
+//                     window.scrollBy({ top: 400, behavior: 'smooth' });
+//                 });
+//             } catch (err) {}
+
+//             console.log("\n[STEP 5] Waiting 3 seconds before unmuting...");
+//             await new Promise(r => setTimeout(r, 3000));
+
+//             for (const frame of page.frames()) {
+//                 try {
+//                     await frame.evaluate(() => {
+//                         const unmuteBtn = document.querySelector('#UnMutePlayer button');
+//                         if (unmuteBtn) unmuteBtn.click();
+//                     });
+//                 } catch (error) {}
+//             }
+
+//             // ==========================================
+//             // NAYA STEP: SCREENSHOT & BRUTE FORCE PLAY
+//             // ==========================================
+//             console.log("\n[STEP 6] Taking Full-Page Debug Screenshot...");
+//             try {
+//                 await page.screenshot({ path: 'debug_screenshot.png', fullPage: true });
+//                 console.log("[SUCCESS] Screenshot saved as 'debug_screenshot.png'.");
+//             } catch (err) {
+//                 console.log(`[ERROR] Screenshot failed: ${err.message}`);
+//             }
+
+//             console.log("\n[STEP 7] Hooking Native MediaRecorder to Video Player...");
+//             let playerFound = false;
+            
+//             for (let attempt = 1; attempt <= 3; attempt++) {
+//                 if (playerFound) break;
+//                 console.log(`[INFO] Searching for <video> tag (Attempt ${attempt}/3)...`);
+                
+//                 for (const frame of page.frames()) {
+//                     if (playerFound) break;
+//                     try {
+//                         const hooked = await frame.evaluate(async () => {
+//                             const video = document.querySelector('video');
+//                             if (video) {
+//                                 try {
+//                                     // ZABARDASTI PLAY KARNE KI KOSHISH
+//                                     video.play().catch(e => console.log("Play blocked by browser:", e));
+                                    
+//                                     const stream = video.captureStream();
+//                                     const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8,opus' });
+                                    
+//                                     recorder.ondataavailable = async (e) => {
+//                                         if (e.data.size > 0) {
+//                                             const reader = new FileReader();
+//                                             reader.readAsDataURL(e.data);
+//                                             reader.onloadend = () => {
+//                                                 const base64 = reader.result.split(',')[1];
+//                                                 window.sendToWorker2(base64);
+//                                             }
+//                                         }
+//                                     };
+//                                     recorder.start(2000);
+//                                     return true;
+//                                 } catch (err) {
+//                                     return false;
+//                                 }
+//                             }
+//                             return false;
+//                         });
+                        
+//                         if (hooked) {
+//                             console.log("[SUCCESS] MediaRecorder hooked successfully!");
+//                             playerFound = true;
+//                         }
+//                     } catch (e) {}
+//                 }
+                
+//                 if(!playerFound) await new Promise(r => setTimeout(r, 10000));
+//             }
+
+//             if (!playerFound) {
+//                 console.log("\n[ERROR CRITICAL] Could not find any video element on this URL.");
+//             } else {
+//                 console.log("\n[STEP 8] Diagnostic Test running for 2 minutes...");
+//                 await new Promise(r => setTimeout(r, 60000)); 
+//                 console.log("\n⏰ [COMPLETED] 2 Minutes Test Over.");
+//             }
+
+//         } catch (error) {
+//             console.log("\n[ERROR FATAL] Execution stopped or error occurred:", error.message);
+//         }
+
+//         console.log("\n[STEP 9] Closing browser and stopping stream...");
+//         ffmpegWorker.postMessage({ type: 'STOP' });
+//         await browser.close();
+//     })();
+// } 
+// else {
+//     const { spawn } = require('child_process');
+//     const rtmpUrl = 'rtmp://vsu.okcdn.ru/input/14601603391083_14040893622891_puxzrwjniu';
+
+//     const ffmpeg = spawn('ffmpeg', [
+//         '-i', 'pipe:0', 
+//         '-c:v', 'libx264', 
+//         '-preset', 'veryfast', 
+//         '-crf', '28', 
+//         '-c:a', 'aac', 
+//         '-b:a', '128k', 
+//         '-f', 'flv', 
+//         rtmpUrl 
+//     ]);
+
+//     parentPort.on('message', (msg) => {
+//         if (msg.type === 'VIDEO_CHUNK') {
+//             const buffer = Buffer.from(msg.data, 'base64');
+//             ffmpeg.stdin.write(buffer); 
+//         } else if (msg.type === 'STOP') {
+//             ffmpeg.stdin.end();
+//             process.exit(0);
+//         }
+//     });
+
+//     ffmpeg.stderr.on('data', () => {});
+// }
 
 
 
