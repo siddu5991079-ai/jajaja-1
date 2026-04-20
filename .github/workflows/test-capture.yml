@@ -88,82 +88,82 @@ jobs:
 
 
 
-name: Project 2 Live Stream Bypass & Record
+# name: Project 2 Live Stream Bypass & Record
 
-on:
-  workflow_dispatch:
-    inputs:
-      stream_url:
-        description: 'Target Stream URL (Direct video page link)'
-        required: true
-        default: 'https://dadocric.st/player.php?id=starsp3&v=m'
+# on:
+#   workflow_dispatch:
+#     inputs:
+#       stream_url:
+#         description: 'Target Stream URL (Direct video page link)'
+#         required: true
+#         default: 'https://dadocric.st/player.php?id=starsp3&v=m'
 
-jobs:
-  bypass-and-broadcast:
-    runs-on: ubuntu-latest
+# jobs:
+#   bypass-and-broadcast:
+#     runs-on: ubuntu-latest
     
-    # Permission zaroori hai taake GitHub script khud Release bana sake
-    permissions:
-      contents: write 
+#     # Permission zaroori hai taake GitHub script khud Release bana sake
+#     permissions:
+#       contents: write 
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
 
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg libgbm-dev
+#       - name: Install System Dependencies
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y xvfb ffmpeg libgbm-dev
 
-      - name: Install Puppeteer & Stealth
-        run: |
-          npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
+#       - name: Install Puppeteer & Stealth
+#         run: |
+#           npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
 
-      - name: Start Diagnostic Broadcast
-        env:
-          STREAM_URL: ${{ github.event.inputs.stream_url }}
-        run: |
-          Xvfb :99 -screen 0 1280x720x24 &
-          export DISPLAY=:99
-          sleep 3
-          node browser.js
+#       - name: Start Diagnostic Broadcast
+#         env:
+#           STREAM_URL: ${{ github.event.inputs.stream_url }}
+#         run: |
+#           Xvfb :99 -screen 0 1280x720x24 &
+#           export DISPLAY=:99
+#           sleep 3
+#           node browser.js
 
-      - name: Upload Logs to GitHub Releases
-        if: always()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "[INFO] Preparing to create GitHub Release for easy viewing..."
+#       - name: Upload Logs to GitHub Releases
+#         if: always()
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#         run: |
+#           echo "[INFO] Preparing to create GitHub Release for easy viewing..."
           
-          TAG_NAME="debug-run-${GITHUB_RUN_ID}"
+#           TAG_NAME="debug-run-${GITHUB_RUN_ID}"
           
-          FILES_TO_UPLOAD=""
-          if [ -f debug_screenshot.png ]; then FILES_TO_UPLOAD="debug_screenshot.png"; fi
-          if [ -f debug_source.webm ]; then FILES_TO_UPLOAD="$FILES_TO_UPLOAD debug_source.webm"; fi
+#           FILES_TO_UPLOAD=""
+#           if [ -f debug_screenshot.png ]; then FILES_TO_UPLOAD="debug_screenshot.png"; fi
+#           if [ -f debug_source.webm ]; then FILES_TO_UPLOAD="$FILES_TO_UPLOAD debug_source.webm"; fi
           
-          if [ -n "$FILES_TO_UPLOAD" ]; then
-            gh release create "$TAG_NAME" $FILES_TO_UPLOAD \
-              --title "Debug Visuals: $TAG_NAME" \
-              --notes "Yahan aapka screenshot aur raw video file hai. Isay check karein."
-            echo "[SUCCESS] Release created! Go to your repository's 'Releases' tab to view."
-          else
-            echo "[WARNING] No files found to upload."
-          fi
+#           if [ -n "$FILES_TO_UPLOAD" ]; then
+#             gh release create "$TAG_NAME" $FILES_TO_UPLOAD \
+#               --title "Debug Visuals: $TAG_NAME" \
+#               --notes "Yahan aapka screenshot aur raw video file hai. Isay check karein."
+#             echo "[SUCCESS] Release created! Go to your repository's 'Releases' tab to view."
+#           else
+#             echo "[WARNING] No files found to upload."
+#           fi
 
-      - name: Upload Diagnostic Artifact (Backup)
-        if: always() 
-        uses: actions/upload-artifact@v4
-        with:
-          name: Source-Debug-Video
-          path: |
-            debug_source.webm
-            debug_screenshot.png
-          retention-days: 1
+#       - name: Upload Diagnostic Artifact (Backup)
+#         if: always() 
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: Source-Debug-Video
+#           path: |
+#             debug_source.webm
+#             debug_screenshot.png
+#           retention-days: 1
 
 
 
